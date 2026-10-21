@@ -1,0 +1,316 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #020617;
+  background-image:
+    radial-gradient(circle at 50% 42%, rgba(30, 27, 75, 0.55) 0%, rgba(2, 6, 23, 0) 68%),
+    linear-gradient(to bottom, #020617 0%, #070d1f 50%, #020617 100%);
+  color: #f8fafc;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  outline: none;
+}
+
+#robot-container {
+  position: relative;
+  width: 360px;
+  height: 310px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  pointer-events: none;
+  margin-top: -36px;
+  z-index: 5;
+}
+
+/* Real-Time 2D Canvas Orbital & Radial Spectrum Visualizer behind Robot */
+#visualizer-canvas {
+  position: absolute;
+  width: 460px;
+  height: 460px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Background Ambient Glow */
+#ambient-aura {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.24) 0%, rgba(99, 102, 241, 0.2) 42%, rgba(2, 6, 23, 0) 70%);
+  filter: blur(46px);
+  pointer-events: none;
+  transition: transform 0.3s ease-out, background 0.4s ease;
+  transform: scale(1);
+  z-index: 0;
+}
+
+#robot-container.hearing #ambient-aura {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, rgba(6, 182, 212, 0.24) 42%, rgba(2, 6, 23, 0) 70%);
+}
+
+#robot-container.speaking #ambient-aura {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.34) 0%, rgba(99, 102, 241, 0.25) 45%, rgba(2, 6, 23, 0) 72%);
+}
+
+/* Listening Pulse Ring */
+#listening-ring {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  border: 2px solid rgba(16, 185, 129, 0.45);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  z-index: 2;
+}
+
+#listening-ring.active {
+  opacity: 0.75;
+  animation: pulseListen 1.4s infinite ease-out;
+}
+
+@keyframes pulseListen {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.38);
+    opacity: 0;
+  }
+}
+
+/* Hearing Soundwave Ripple underneath robot */
+#hearing-waves {
+  position: absolute;
+  bottom: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 4;
+}
+
+#robot-container.hearing #hearing-waves {
+  opacity: 1;
+}
+
+.h-wave {
+  width: 3.5px;
+  height: 5px;
+  border-radius: 4px;
+  background: linear-gradient(to top, #10b981, #34d399, #06b6d4);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.9);
+  transition: height 0.06s ease;
+}
+
+/* SVG Robot */
+#robot-svg {
+  position: relative;
+  z-index: 3;
+  width: 330px;
+  height: 280px;
+  overflow: visible;
+  filter: drop-shadow(0 20px 42px rgba(0, 0, 0, 0.75));
+  transition: transform 0.1s ease-out;
+}
+
+#halo-ring {
+  transform-origin: 120px 100px;
+  animation: slowSpin 24s linear infinite;
+}
+
+@keyframes slowSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Vocal Bars below chin (when AI speaks) */
+#vocal-bars {
+  position: absolute;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 4;
+}
+
+#vocal-bars.speaking {
+  opacity: 1;
+}
+
+.bar {
+  width: 4px;
+  height: 6px;
+  border-radius: 4px;
+  background: linear-gradient(to top, #06b6d4, #38bdf8, #a5b4fc);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.85);
+  transition: height 0.07s ease;
+}
+
+/* =========================================================
+   WORD-BY-WORD EXTENDING LINE + GLIDE UP & FADE ANIMATION
+   Words appear one by one with audio, extending to 6-7 words
+   before smoothly gliding upward and fading away
+   ========================================================= */
+#caption-stream {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 680px;
+  height: 124px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 10;
+}
+
+.caption-line {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  line-height: 1.5;
+  letter-spacing: 0.012em;
+  transition:
+    transform 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+    font-size 0.55s ease;
+  will-change: transform, opacity, filter;
+}
+
+/* Active line where words append one by one with audio */
+.caption-line.active {
+  font-size: 18px;
+  font-weight: 500;
+  color: #f0f9ff;
+  opacity: 1;
+  transform: translateY(0px) scale(1);
+  text-shadow: 0 0 18px rgba(56, 189, 248, 0.65);
+  filter: blur(0px);
+}
+
+/* 1 step glided up (previous completed phrase) */
+.caption-line.step-1 {
+  font-size: 16.5px;
+  font-weight: 400;
+  color: #bae6fd;
+  opacity: 0.52;
+  transform: translateY(-32px) scale(0.96);
+  filter: blur(0.5px);
+}
+
+/* 2 steps glided up (fading phrase) */
+.caption-line.step-2 {
+  font-size: 15px;
+  font-weight: 400;
+  color: #94a3b8;
+  opacity: 0.2;
+  transform: translateY(-62px) scale(0.92);
+  filter: blur(1.6px);
+}
+
+/* 3 steps glided up (vanishing phrase) */
+.caption-line.step-3 {
+  font-size: 14px;
+  font-weight: 400;
+  color: #64748b;
+  opacity: 0;
+  transform: translateY(-90px) scale(0.88);
+  filter: blur(3.5px);
+}
+
+/* Smooth per-word reveal inside active line */
+.word-span {
+  display: inline-block;
+  opacity: 0;
+  margin-right: 0.28em;
+  animation: wordReveal 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes wordReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* =========================================================
+   FLOATING LIVE INVISIBLE TEXT TYPER (NO CHATBOX)
+   Appears only while typing on the keyboard
+   ========================================================= */
+#typing-line {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #6ee7b7;
+  text-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
+  z-index: 20;
+}
+
+#typing-line.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+#typing-caret {
+  display: inline-block;
+  width: 2px;
+  height: 15px;
+  margin-left: 3px;
+  background-color: #34d399;
+  vertical-align: middle;
+  animation: blink 0.85s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

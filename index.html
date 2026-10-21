@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gemini 3.1 Flash Live</title>
+    <meta name="description" content="Talking robot companion with real-time hearing effects and scrolling text animation." />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <!-- Centerpiece: Single Speaking Robot Avatar -->
+    <div id="robot-container">
+      <div id="ambient-aura"></div>
+      <div id="listening-ring"></div>
+
+      <!-- Hearing Soundwave Ripple beneath robot -->
+      <div id="hearing-waves">
+        <div class="h-wave"></div>
+        <div class="h-wave"></div>
+        <div class="h-wave"></div>
+        <div class="h-wave"></div>
+        <div class="h-wave"></div>
+      </div>
+
+      <svg id="robot-svg" viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="headGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#1e1b4b" />
+            <stop offset="60%" stop-color="#0f172a" />
+            <stop offset="100%" stop-color="#020617" />
+          </linearGradient>
+
+          <linearGradient id="facePlate" x1="20%" y1="0%" x2="80%" y2="100%">
+            <stop offset="0%" stop-color="#2e1065" stop-opacity="0.85" />
+            <stop offset="50%" stop-color="#1e1b4b" stop-opacity="0.92" />
+            <stop offset="100%" stop-color="#0f172a" stop-opacity="0.98" />
+          </linearGradient>
+
+          <linearGradient id="rimGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop id="rim-stop1" offset="0%" stop-color="#06b6d4" />
+            <stop id="rim-stop2" offset="100%" stop-color="#3b82f6" />
+          </linearGradient>
+
+          <linearGradient id="hearingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#10b981" />
+            <stop offset="100%" stop-color="#06b6d4" />
+          </linearGradient>
+
+          <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        <!-- Ear Acoustic Waves (AI Hearing User Effect) -->
+        <g id="ear-waves" opacity="0">
+          <!-- Left ear waves -->
+          <path id="ew-l1" d="M 22 84 A 20 20 0 0 0 22 116" fill="none" stroke="url(#hearingGrad)" stroke-width="2" stroke-linecap="round" />
+          <path id="ew-l2" d="M 14 78 A 28 28 0 0 0 14 122" fill="none" stroke="url(#hearingGrad)" stroke-width="2" stroke-linecap="round" />
+          <path id="ew-l3" d="M 6 72 A 36 36 0 0 0 6 128" fill="none" stroke="url(#hearingGrad)" stroke-width="2" stroke-linecap="round" />
+
+          <!-- Right ear waves -->
+          <path id="ew-r1" d="M 218 84 A 20 20 0 0 1 218 116" fill="none" stroke="url(#hearingGrad)" stroke-width="2" stroke-linecap="round" />
+          <path id="ew-r2" d="M 226 78 A 28 28 0 0 1 226 122" fill="none" stroke="url(#hearingGrad)" stroke-width="2" stroke-linecap="round" />
+          <path id="ew-r3" d="M 234 72 A 36 36 0 0 1 234 128" fill="none" stroke="url(#hearingGrad)" stroke-width="2" stroke-linecap="round" />
+        </g>
+
+        <!-- Outer Halo Ring -->
+        <circle id="halo-ring" cx="120" cy="100" r="84" fill="none" stroke="url(#rimGlow)" stroke-width="2.5" />
+
+        <!-- Side Ear Sensors -->
+        <g id="ears" opacity="0.85">
+          <rect x="28" y="86" width="8" height="28" rx="4" fill="#312e81" stroke="url(#rimGlow)" stroke-width="1.5" />
+          <rect x="204" y="86" width="8" height="28" rx="4" fill="#312e81" stroke="url(#rimGlow)" stroke-width="1.5" />
+        </g>
+
+        <!-- Head Silhouette -->
+        <rect x="44" y="22" width="152" height="156" rx="54" fill="url(#headGrad)" stroke="#4338ca" stroke-width="1.5" stroke-opacity="0.45" />
+
+        <!-- Inner Visor Screen -->
+        <rect x="56" y="34" width="128" height="132" rx="42" fill="url(#facePlate)" stroke="#6366f1" stroke-width="1" stroke-opacity="0.35" />
+
+        <!-- Forehead Dot / Hearing Sensory Pulse -->
+        <circle id="forehead-dot" cx="120" cy="50" r="3.5" fill="#6366f1" opacity="0.6" filter="url(#glow)" />
+        <circle id="forehead-pulse" cx="120" cy="50" r="3.5" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0" />
+
+        <!-- Left Eye -->
+        <g id="left-eye" transform="translate(88, 86)">
+          <ellipse cx="0" cy="0" rx="14" ry="14" fill="#090d16" />
+          <ellipse id="left-iris" cx="0" cy="0" rx="10" ry="10" fill="#38bdf8" filter="url(#glow)" />
+          <circle id="left-pupil" cx="0" cy="0" r="4" fill="#030712" />
+          <circle id="left-catchlight" cx="-3" cy="-3" r="2" fill="#ffffff" opacity="0.9" />
+        </g>
+
+        <!-- Right Eye -->
+        <g id="right-eye" transform="translate(152, 86)">
+          <ellipse cx="0" cy="0" rx="14" ry="14" fill="#090d16" />
+          <ellipse id="right-iris" cx="0" cy="0" rx="10" ry="10" fill="#38bdf8" filter="url(#glow)" />
+          <circle id="right-pupil" cx="0" cy="0" r="4" fill="#030712" />
+          <circle id="right-catchlight" cx="-3" cy="-3" r="2" fill="#ffffff" opacity="0.9" />
+        </g>
+
+        <!-- Cheeks (glow softly when hearing/speaking) -->
+        <g id="cheeks" opacity="0.25">
+          <ellipse id="left-cheek" cx="76" cy="112" rx="8" ry="4" fill="#ec4899" filter="url(#glow)" />
+          <ellipse id="right-cheek" cx="164" cy="112" rx="8" ry="4" fill="#ec4899" filter="url(#glow)" />
+        </g>
+
+        <!-- Dynamic Speaking Mouth Animation -->
+        <g id="mouth-group" transform="translate(120, 134)">
+          <ellipse id="mouth-cavity" cx="0" cy="0" rx="20" ry="0" fill="#180d2b" stroke="#4338ca" stroke-width="1.5" opacity="0" />
+          <ellipse id="mouth-glow" cx="0" cy="2" rx="14" ry="0" fill="#38bdf8" opacity="0" filter="url(#glow)" />
+          <path id="mouth-line" d="M -22 0 Q 0 2 22 0" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" filter="url(#glow)" />
+        </g>
+      </svg>
+
+      <!-- Vocal sound wave bars (when AI speaks) -->
+      <div id="vocal-bars">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </div>
+    </div>
+
+    <!-- Scrolling Text Animation (Full lines write, scroll up, and fade out) -->
+    <div id="caption-stream"></div>
+
+    <!-- Floating Live Keystrokes (Appears only while typing on keyboard, no chatbox) -->
+    <div id="typing-line" class="hidden">
+      <span id="typing-text"></span><span id="typing-caret"></span>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
