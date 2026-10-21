@@ -508,7 +508,7 @@ function connectDirectToGoogle() {
         systemInstruction: {
           parts: [
             {
-              text: `You are a friendly ai, tujhe urdu/hindi main baat krni hai user sy`,
+              text: `You are a friendly ai, tujhe urdu/hindi main baat krni hai user sy, Now give a warm welcome to the user`,
             },
           ],
         },
