@@ -1,3 +1,7 @@
+/* =========================================================
+   SOFTER MATTE GRAPHITE & SLATE // ZERO EYE STRAIN
+   ========================================================= */
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -9,103 +13,238 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: #020617;
+  background-color: #1e1e22;
   background-image:
-    radial-gradient(circle at 50% 42%, rgba(30, 27, 75, 0.55) 0%, rgba(2, 6, 23, 0) 68%),
-    linear-gradient(to bottom, #020617 0%, #070d1f 50%, #020617 100%);
-  color: #f8fafc;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    radial-gradient(circle at 50% 32%, #292930 0%, #202025 55%, #18181c 100%);
+  color: #dedee4;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   user-select: none;
   -webkit-user-select: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   position: relative;
   outline: none;
 }
 
-#robot-container {
-  position: relative;
-  width: 360px;
-  height: 310px;
+#omni-input {
+  position: absolute;
+  top: -200px;
+  left: -200px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: auto;
+  border: none;
+  outline: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* =========================================================
+   EXPANDABLE & ROTATABLE OPTICAL VIEWPORT (NO TEXT)
+   ========================================================= */
+#camera-frame {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 165px;
+  height: 112px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #25252b;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  z-index: 35;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Big Screen Expansion */
+#camera-frame.expanded {
+  top: 50%;
+  right: 50%;
+  transform: translate(50%, -50%);
+  width: min(88vw, 720px);
+  height: min(70vh, 500px);
+  border-radius: 20px;
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  z-index: 50;
+}
+
+#camera-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.25s ease;
+}
+
+#camera-feed.mirrored {
+  transform: scaleX(-1);
+}
+
+#camera-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: default;
-  pointer-events: none;
-  margin-top: -36px;
-  z-index: 5;
-}
-
-/* Real-Time 2D Canvas Orbital & Radial Spectrum Visualizer behind Robot */
-#visualizer-canvas {
-  position: absolute;
-  width: 460px;
-  height: 460px;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Background Ambient Glow */
-#ambient-aura {
-  position: absolute;
-  width: 420px;
-  height: 420px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.24) 0%, rgba(99, 102, 241, 0.2) 42%, rgba(2, 6, 23, 0) 70%);
-  filter: blur(46px);
-  pointer-events: none;
-  transition: transform 0.3s ease-out, background 0.4s ease;
-  transform: scale(1);
-  z-index: 0;
-}
-
-#robot-container.hearing #ambient-aura {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, rgba(6, 182, 212, 0.24) 42%, rgba(2, 6, 23, 0) 70%);
-}
-
-#robot-container.speaking #ambient-aura {
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.34) 0%, rgba(99, 102, 241, 0.25) 45%, rgba(2, 6, 23, 0) 72%);
-}
-
-/* Listening Pulse Ring */
-#listening-ring {
-  position: absolute;
-  width: 300px;
-  height: 300px;
-  border-radius: 50%;
-  border: 2px solid rgba(16, 185, 129, 0.45);
-  pointer-events: none;
-  opacity: 0;
-  transform: scale(0.95);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  gap: 8px;
   z-index: 2;
 }
 
-#listening-ring.active {
-  opacity: 0.75;
-  animation: pulseListen 1.4s infinite ease-out;
+.cam-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(26, 26, 32, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #dedee4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+  outline: none;
 }
 
-@keyframes pulseListen {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.85;
-  }
-  100% {
-    transform: scale(1.38);
-    opacity: 0;
-  }
+.cam-icon-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
-/* Hearing Soundwave Ripple underneath robot */
-#hearing-waves {
+.cam-icon-btn:hover {
+  background: rgba(45, 45, 54, 0.9);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* =========================================================
+   RESPONSIVE WORKSPACE (NO OVERLAPPING)
+   ========================================================= */
+#app-workspace {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 20px;
+  padding-bottom: 74px;
+  gap: 14px;
+}
+
+#avatar-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#monolith-stage {
+  position: relative;
+  width: 290px;
+  height: 245px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#ambient-fog {
   position: absolute;
-  bottom: -6px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(220, 220, 230, 0.07) 0%, rgba(60, 60, 70, 0.04) 50%, transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  transform: scale(1);
+  transition: transform 0.35s ease, background 0.4s ease;
+  z-index: 0;
+}
+
+#monolith-stage.hearing #ambient-fog {
+  background: radial-gradient(circle, rgba(230, 230, 240, 0.15) 0%, rgba(90, 90, 105, 0.08) 50%, transparent 70%);
+}
+
+#monolith-stage.speaking #ambient-fog {
+  background: radial-gradient(circle, rgba(240, 240, 245, 0.2) 0%, rgba(130, 130, 145, 0.1) 50%, transparent 70%);
+}
+
+#acoustic-ring {
+  position: absolute;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity 0.3s ease;
+  z-index: 2;
+}
+
+#acoustic-ring.active {
+  opacity: 0.75;
+  animation: pulseAcoustic 1.6s infinite cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pulseAcoustic {
+  0% { transform: scale(0.96); opacity: 0.75; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+#acoustic-meter {
+  position: absolute;
+  bottom: 0px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 22px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 4;
+}
+
+#monolith-stage.hearing #acoustic-meter {
+  opacity: 1;
+}
+
+.meter-bar {
+  width: 2.5px;
+  height: 5px;
+  border-radius: 2px;
+  background: linear-gradient(to top, #484852, #9a9aa5, #dedee5);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.25);
+  transition: height 0.05s ease;
+}
+
+#monolith-svg {
+  position: relative;
+  z-index: 3;
+  width: 275px;
+  height: 230px;
+  overflow: visible;
+  filter: drop-shadow(0 16px 36px rgba(0, 0, 0, 0.65));
+  transition: transform 0.12s ease-out;
+}
+
+#gyro-orbit {
+  transform-origin: 130px 110px;
+  animation: gyroSpin 36s linear infinite;
+}
+
+@keyframes gyroSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+#vocal-spectrogram {
+  position: absolute;
+  bottom: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -113,204 +252,201 @@ html, body {
   height: 24px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.2s ease;
   z-index: 4;
 }
 
-#robot-container.hearing #hearing-waves {
+#vocal-spectrogram.speaking {
   opacity: 1;
 }
 
-.h-wave {
-  width: 3.5px;
-  height: 5px;
-  border-radius: 4px;
-  background: linear-gradient(to top, #10b981, #34d399, #06b6d4);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.9);
+.vocal-bar {
+  width: 3px;
+  height: 6px;
+  border-radius: 2px;
+  background: linear-gradient(to top, #555560, #c0c0cb, #f0f0f5);
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.35);
   transition: height 0.06s ease;
 }
 
-/* SVG Robot */
-#robot-svg {
-  position: relative;
-  z-index: 3;
-  width: 330px;
-  height: 280px;
-  overflow: visible;
-  filter: drop-shadow(0 20px 42px rgba(0, 0, 0, 0.75));
-  transition: transform 0.1s ease-out;
-}
-
-#halo-ring {
-  transform-origin: 120px 100px;
-  animation: slowSpin 24s linear infinite;
-}
-
-@keyframes slowSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Vocal Bars below chin (when AI speaks) */
-#vocal-bars {
-  position: absolute;
-  bottom: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 26px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-  z-index: 4;
-}
-
-#vocal-bars.speaking {
-  opacity: 1;
-}
-
-.bar {
-  width: 4px;
-  height: 6px;
-  border-radius: 4px;
-  background: linear-gradient(to top, #06b6d4, #38bdf8, #a5b4fc);
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.85);
-  transition: height 0.07s ease;
-}
-
-/* =========================================================
-   WORD-BY-WORD EXTENDING LINE + GLIDE UP & FADE ANIMATION
-   Words appear one by one with audio, extending to 6-7 words
-   before smoothly gliding upward and fading away
-   ========================================================= */
-#caption-stream {
-  position: absolute;
-  bottom: 64px;
-  left: 50%;
-  transform: translateX(-50%);
+/* Zone 2: Dialogue Zone */
+#dialogue-zone {
   width: 90%;
-  max-width: 680px;
-  height: 124px;
+  max-width: 560px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   pointer-events: none;
-  overflow: visible;
   z-index: 10;
 }
 
-.caption-line {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  text-align: center;
+.statement-card {
+  border-radius: 12px;
+  padding: 10px 16px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.origin-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.statement-body {
+  font-size: 14.5px;
   line-height: 1.5;
-  letter-spacing: 0.012em;
-  transition:
-    transform 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-    font-size 0.55s ease;
-  will-change: transform, opacity, filter;
+  letter-spacing: 0.01em;
 }
 
-/* Active line where words append one by one with audio */
-.caption-line.active {
-  font-size: 18px;
-  font-weight: 500;
-  color: #f0f9ff;
-  opacity: 1;
-  transform: translateY(0px) scale(1);
-  text-shadow: 0 0 18px rgba(56, 189, 248, 0.65);
-  filter: blur(0px);
+#user-statement {
+  align-self: flex-end;
+  background: rgba(45, 45, 52, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f2f2f6;
+  max-width: 85%;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
-/* 1 step glided up (previous completed phrase) */
-.caption-line.step-1 {
-  font-size: 16.5px;
-  font-weight: 400;
-  color: #bae6fd;
-  opacity: 0.52;
-  transform: translateY(-32px) scale(0.96);
-  filter: blur(0.5px);
+#user-statement .origin-label {
+  color: #9d9da8;
 }
 
-/* 2 steps glided up (fading phrase) */
-.caption-line.step-2 {
-  font-size: 15px;
-  font-weight: 400;
-  color: #94a3b8;
-  opacity: 0.2;
-  transform: translateY(-62px) scale(0.92);
-  filter: blur(1.6px);
+#ai-statement {
+  align-self: flex-start;
+  background: rgba(33, 33, 38, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #dedee4;
+  max-width: 92%;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
 }
 
-/* 3 steps glided up (vanishing phrase) */
-.caption-line.step-3 {
-  font-size: 14px;
-  font-weight: 400;
-  color: #64748b;
-  opacity: 0;
-  transform: translateY(-90px) scale(0.88);
-  filter: blur(3.5px);
-}
-
-/* Smooth per-word reveal inside active line */
-.word-span {
-  display: inline-block;
-  opacity: 0;
-  margin-right: 0.28em;
-  animation: wordReveal 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes wordReveal {
-  0% {
-    opacity: 0;
-    transform: translateY(6px);
-    filter: blur(2px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
+#ai-statement .origin-label {
+  color: #787882;
 }
 
 /* =========================================================
-   FLOATING LIVE INVISIBLE TEXT TYPER (NO CHATBOX)
-   Appears only while typing on the keyboard
+   GHOST KEYSTROKE NOTIFICATION
    ========================================================= */
-#typing-line {
+#ghost-typing {
   position: absolute;
-  bottom: 24px;
+  bottom: 80px;
   left: 50%;
   transform: translateX(-50%);
-  max-width: 90vw;
+  max-width: 86vw;
   text-align: center;
   pointer-events: none;
-  transition: opacity 0.2s ease;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 500;
-  color: #6ee7b7;
-  text-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
-  z-index: 20;
+  color: #f5f5fa;
+  z-index: 25;
+  background: rgba(36, 36, 42, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 8px 18px;
+  border-radius: 9999px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.2s ease;
 }
 
-#typing-line.hidden {
-  opacity: 0;
-  visibility: hidden;
-}
-
-#typing-caret {
+#ghost-cursor {
   display: inline-block;
   width: 2px;
-  height: 15px;
-  margin-left: 3px;
-  background-color: #34d399;
+  height: 14px;
+  margin-left: 4px;
+  background-color: #ffffff;
   vertical-align: middle;
-  animation: blink 0.85s infinite;
+  animation: softBlink 0.85s infinite;
 }
 
-@keyframes blink {
+@keyframes softBlink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  50% { opacity: 0.25; }
+}
+
+/* =========================================================
+   BOTTOM CONTROLS DOCK
+   ========================================================= */
+#control-dock {
+  position: absolute;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(34, 34, 40, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 6px 12px;
+  border-radius: 9999px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  z-index: 25;
+}
+
+.dock-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #9d9da8;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.dock-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.dock-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f0f5;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.dock-btn.active {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05);
+}
+
+@media (max-width: 600px) {
+  #camera-frame {
+    width: 130px;
+    height: 90px;
+    top: 18px;
+    right: 16px;
+  }
+
+  #monolith-stage {
+    width: 250px;
+    height: 210px;
+  }
+
+  #monolith-svg {
+    width: 240px;
+    height: 200px;
+  }
+
+  .dock-btn span {
+    display: none;
+  }
+
+  .dock-btn {
+    padding: 10px;
+  }
 }
