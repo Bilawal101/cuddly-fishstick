@@ -1,12 +1,16 @@
 const shit = 'QVEuQWI4Uk42THhjWnQ5ejJiaXhWRmwxWUFmZ29xZWhEVlA3Tms2a2ZqTS15Sm5fZG9mS1E=';
 const API_KEY = atob(shit);
+
+// Model and Voice strictly preserved
 const MODEL_NAME = 'models/gemini-3.1-flash-live-preview';
 const VOICE_NAME = 'Iapetus';
-
-// Must use v1beta for gemini-3.1-flash-live-preview (matches google-genai SDK default in ass.py)
 const GOOGLE_LIVE_WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(API_KEY)}`;
 
-// PCM Conversions
+// Session Resumption Cache Constants
+const SESSION_CACHE_KEY = 'Novax_gemini_session_handle_v1';
+const SESSION_TTL_MS = 1000 * 60 * 15; // 15-minute validity
+
+// Audio PCM conversions
 function float32To16BitPCMBase64(input) {
   try {
     const output = new Int16Array(input.length);
@@ -48,7 +52,52 @@ function base64To16BitPCMFloat32(base64) {
 }
 
 // =========================================================
-// AUDIO SYSTEM (Input: 16kHz Worklet/PCM, Output: 24kHz Live Audio)
+// BACKGROUND SESSION RESUMPTION VAULT
+// =========================================================
+class SessionVault {
+  static getValidHandle() {
+    try {
+      const raw = localStorage.getItem(SESSION_CACHE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (data && data.handle && typeof data.timestamp === 'number') {
+        const age = Date.now() - data.timestamp;
+        if (age < SESSION_TTL_MS) {
+          return data.handle;
+        }
+      }
+      this.clear();
+      return null;
+    } catch {
+      this.clear();
+      return null;
+    }
+  }
+
+  static storeHandle(handle) {
+    if (!handle) return;
+    try {
+      localStorage.setItem(
+        SESSION_CACHE_KEY,
+        JSON.stringify({
+          handle: handle,
+          timestamp: Date.now(),
+        })
+      );
+    } catch (e) {
+      console.warn('[SessionVault] Failed to save session handle:', e);
+    }
+  }
+
+  static clear() {
+    try {
+      localStorage.removeItem(SESSION_CACHE_KEY);
+    } catch {}
+  }
+}
+
+// =========================================================
+// AUDIO SYSTEM (16kHz Buffered Input, 24kHz Live Output)
 // =========================================================
 class AudioSystem {
   constructor() {
@@ -66,6 +115,10 @@ class AudioSystem {
     this.isListening = false;
     this.userMicLevel = 0;
     this.smoothedMicLevel = 0;
+
+    // Buffers worklet frames to 128ms packets to prevent websocket flooding
+    this.audioBuffer = [];
+    this.targetChunkSize = 2048;
   }
 
   initOutput() {
@@ -114,7 +167,7 @@ class AudioSystem {
         if (idx !== -1) this.activeSources.splice(idx, 1);
       };
     } catch (err) {
-      console.warn('Audio play chunk warning:', err);
+      console.warn('Audio play warning:', err);
     }
   }
 
@@ -150,24 +203,11 @@ class AudioSystem {
     }
   }
 
-  getFrequencyBands(count = 48) {
-    const bands = new Float32Array(count);
-    if (!this.analyser || !this.freqData) return bands;
-    this.analyser.getByteFrequencyData(this.freqData);
-    const step = Math.max(1, Math.floor(this.freqData.length / count));
-    for (let i = 0; i < count; i++) {
-      bands[i] = (this.freqData[i * step] || 0) / 255;
-    }
-    return bands;
-  }
-
   async startMicrophone(onAudioChunk) {
     if (this.isListening) return;
     try {
       this.initOutput();
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return;
-      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -211,13 +251,13 @@ class AudioSystem {
           source.connect(this.workletNode);
           this.workletNode.connect(this.micCtx.destination);
           workletLoaded = true;
-        } catch (wErr) {
+        } catch {
           workletLoaded = false;
         }
       }
 
       if (!workletLoaded) {
-        this.processor = this.micCtx.createScriptProcessor(4096, 1, 1);
+        this.processor = this.micCtx.createScriptProcessor(2048, 1, 1);
         this.processor.onaudioprocess = (e) => {
           const inputData = e.inputBuffer.getChannelData(0);
           this.handleRawMicSamples(inputData, onAudioChunk);
@@ -228,7 +268,7 @@ class AudioSystem {
 
       this.isListening = true;
     } catch (err) {
-      console.warn('[Microphone] Access notice:', err?.message || err);
+      console.warn('[Microphone] Notice:', err?.message || err);
     }
   }
 
@@ -237,12 +277,17 @@ class AudioSystem {
       let sum = 0;
       for (let i = 0; i < inputData.length; i++) {
         sum += Math.abs(inputData[i]);
+        this.audioBuffer.push(inputData[i]);
       }
       this.userMicLevel = Math.min(1, (sum / inputData.length) * 6.5);
 
-      const base64PCM = float32To16BitPCMBase64(inputData);
-      if (onAudioChunk && base64PCM) {
-        onAudioChunk(base64PCM);
+      if (this.audioBuffer.length >= this.targetChunkSize) {
+        const floatArray = new Float32Array(this.audioBuffer);
+        this.audioBuffer = [];
+        const base64PCM = float32To16BitPCMBase64(floatArray);
+        if (onAudioChunk && base64PCM) {
+          onAudioChunk(base64PCM);
+        }
       }
     } catch (procErr) {
       console.warn('Process audio warning:', procErr);
@@ -263,222 +308,257 @@ class AudioSystem {
       this.micCtx = null;
     }
     if (this.micStream) {
-      try {
-        this.micStream.getTracks().forEach((track) => track.stop());
-      } catch (e) {}
+      try { this.micStream.getTracks().forEach((track) => track.stop()); } catch (e) {}
       this.micStream = null;
     }
     this.isListening = false;
     this.userMicLevel = 0;
+    this.audioBuffer = [];
   }
 }
 
-// Global instances & DOM references
+// Global Variables
 const audio = new AudioSystem();
 let ws = null;
 let isSetupComplete = false;
-let sessionHandle = null;
+let sessionHandle = SessionVault.getValidHandle();
 let hasSentInitialBoot = false;
-let typedText = '';
-let isReconnecting = false;
 let pointerX = 0;
 let pointerY = 0;
+let isReconnecting = false;
 const pendingMessages = [];
 
-const robotContainer = document.getElementById('robot-container');
-const robotSvg = document.getElementById('robot-svg');
-const visualizerCanvas = document.getElementById('visualizer-canvas');
-const visualizerCtx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
-const ambientAura = document.getElementById('ambient-aura');
-const listeningRing = document.getElementById('listening-ring');
-const hWaveBars = document.querySelectorAll('.h-wave');
-const earWaves = document.getElementById('ear-waves');
-const foreheadPulse = document.getElementById('forehead-pulse');
-const mouthCavity = document.getElementById('mouth-cavity');
-const mouthGlow = document.getElementById('mouth-glow');
-const mouthLine = document.getElementById('mouth-line');
-const vocalBars = document.getElementById('vocal-bars');
-const bars = document.querySelectorAll('.bar');
-const leftEye = document.getElementById('left-eye');
-const rightEye = document.getElementById('right-eye');
-const leftIris = document.getElementById('left-iris');
-const rightIris = document.getElementById('right-iris');
-const leftPupil = document.getElementById('left-pupil');
-const rightPupil = document.getElementById('right-pupil');
-const captionStream = document.getElementById('caption-stream');
-const typingLine = document.getElementById('typing-line');
-const typingText = document.getElementById('typing-text');
+// DOM References
+const monolithStage = document.getElementById('monolith-stage');
+const monolithSvg = document.getElementById('monolith-svg');
+const ambientFog = document.getElementById('ambient-fog');
+const acousticRing = document.getElementById('acoustic-ring');
+const meterBars = document.querySelectorAll('.meter-bar');
+const lateralWaves = document.getElementById('lateral-waves');
+const foreheadRipple = document.getElementById('forehead-ripple');
+const apertureDepth = document.getElementById('aperture-depth');
+const apertureLum = document.getElementById('aperture-lum');
+const apertureSlit = document.getElementById('aperture-slit');
+const vocalSpectrogram = document.getElementById('vocal-spectrogram');
+const vocalBars = document.querySelectorAll('.vocal-bar');
+const opticalL = document.getElementById('optical-l');
+const opticalR = document.getElementById('optical-r');
+const irisL = document.getElementById('iris-l');
+const irisR = document.getElementById('iris-r');
+const pupilL = document.getElementById('pupil-l');
+const pupilR = document.getElementById('pupil-r');
+
+// Dialogue References
+const userStatement = document.getElementById('user-statement');
+const userBody = document.getElementById('user-body');
+const aiStatement = document.getElementById('ai-statement');
+const aiBody = document.getElementById('ai-body');
+
+// Controls & Keyboard References
+const omniInput = document.getElementById('omni-input');
+const ghostTyping = document.getElementById('ghost-typing');
+const ghostChars = document.getElementById('ghost-chars');
+const btnCamera = document.getElementById('btn-camera');
+const btnMic = document.getElementById('btn-mic');
+const btnResetSession = document.getElementById('btn-reset-session');
+
+// Camera References
+const cameraFrame = document.getElementById('camera-frame');
+const cameraFeed = document.getElementById('camera-feed');
+const btnExpandCam = document.getElementById('btn-expand-cam');
+const btnRotateCam = document.getElementById('btn-rotate-cam');
+const expandIcon = document.getElementById('expand-icon');
+const collapseIcon = document.getElementById('collapse-icon');
+const offscreenCanvas = document.createElement('canvas');
+
+let camStream = null;
+let camInterval = null;
+let isCamActive = false;
+let isCamExpanded = false;
+let currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
 
 // =========================================================
-// WORD-BY-WORD AUDIO-SYNCED STREAMER WITH PHRASE GLIDE & FADE
-// Shows each word one by one as the AI speaks, extending the line
-// to 5-6 words before smoothly gliding the line upward and fading out
+// 1-TO-1 DIALOGUE MANAGER
 // =========================================================
-class CaptionStreamer {
-  constructor(container) {
-    this.container = container;
-    this.lines = [];
-    this.currentLineEl = null;
-    this.currentWordCount = 0;
-    this.maxWordsPerLine = 6;
-    this.partialToken = '';
-    this.wordQueue = [];
-    this.isRevealing = false;
-    this.flushTimer = null;
-    this.cleanupTimer = null;
+class DialogueEngine {
+  constructor() {
+    this.currentAiText = '';
+    this.userDismissTimer = null;
+    this.aiDismissTimer = null;
   }
 
-  addWords(chunkText) {
-    if (!chunkText || !this.container) return;
+  showUser(text) {
+    if (!text || !text.trim()) return;
+    clearTimeout(this.userDismissTimer);
+    userBody.textContent = text.trim();
+    userStatement.classList.remove('hidden');
 
-    // Combine with any partial sub-word from the previous WebSocket frame
-    const combined = this.partialToken + chunkText;
-    const endsWithSpace = /\s$/.test(combined);
-    const trimmed = combined.trimStart();
-    if (!trimmed) {
-      this.partialToken = '';
-      return;
-    }
-
-    const parts = trimmed.split(/\s+/);
-    const completeWords = endsWithSpace ? parts : parts.slice(0, -1);
-    this.partialToken = endsWithSpace ? '' : parts[parts.length - 1] || '';
-
-    for (const word of completeWords) {
-      if (word) this.enqueueWord(word);
-    }
-
-    // Flush trailing word if stream pauses briefly
-    clearTimeout(this.flushTimer);
-    this.flushTimer = setTimeout(() => {
-      this.flush();
-    }, 260);
-
-    this.scheduleCleanup();
+    this.userDismissTimer = setTimeout(() => {
+      userStatement.classList.add('hidden');
+    }, 7500);
   }
 
-  flush() {
-    if (this.partialToken.trim()) {
-      this.enqueueWord(this.partialToken.trim());
-      this.partialToken = '';
-    }
+  beginAiTurn() {
+    clearTimeout(this.aiDismissTimer);
+    this.currentAiText = '';
+    aiBody.textContent = '';
+    aiStatement.classList.remove('hidden');
   }
 
-  enqueueWord(word) {
-    this.wordQueue.push(word);
-    if (!this.isRevealing) {
-      this.processWordQueue();
-    }
+  feedAiTranscript(chunk) {
+    if (!chunk) return;
+    this.currentAiText += chunk;
+    aiBody.textContent = this.currentAiText;
+    aiStatement.classList.remove('hidden');
+    clearTimeout(this.aiDismissTimer);
   }
 
-  processWordQueue() {
-    if (this.wordQueue.length === 0) {
-      this.isRevealing = false;
-      this.scheduleCleanup();
-      return;
-    }
-
-    this.isRevealing = true;
-    const nextWord = this.wordQueue.shift();
-    this.appendSingleWord(nextWord);
-
-    // Pace multi-word bursts so each word reveals one by one in sync with speech
-    const delayMs = this.wordQueue.length > 4 ? 75 : 110;
-    setTimeout(() => {
-      this.processWordQueue();
-    }, delayMs);
-  }
-
-  appendSingleWord(word) {
-    if (!this.container) return;
-
-    // Start the first line or glide up once the current line has extended to 5-6 words
-    if (!this.currentLineEl || this.currentWordCount >= this.maxWordsPerLine) {
-      this.glideLinesUpAndStartNew();
-    }
-
-    const span = document.createElement('span');
-    span.className = 'word-span';
-    span.textContent = word;
-    this.currentLineEl.appendChild(span);
-    this.currentWordCount++;
-
-    // If a clause/sentence finishes after 4+ words, let the next word start a fresh line
-    if (/[,.;:!?]$/.test(word) && this.currentWordCount >= 4) {
-      this.currentWordCount = this.maxWordsPerLine;
-    }
-  }
-
-  glideLinesUpAndStartNew() {
-    for (let i = this.lines.length - 1; i >= 0; i--) {
-      const line = this.lines[i];
-      const age = this.lines.length - 1 - i + 1;
-
-      line.classList.remove('active', 'step-1', 'step-2', 'step-3');
-
-      if (age === 1) {
-        line.classList.add('step-1');
-      } else if (age === 2) {
-        line.classList.add('step-2');
-      } else {
-        line.classList.add('step-3');
-        setTimeout(() => {
-          if (line.parentNode) line.parentNode.removeChild(line);
-          const idx = this.lines.indexOf(line);
-          if (idx !== -1) this.lines.splice(idx, 1);
-        }, 680);
+  concludeAiTurn() {
+    clearTimeout(this.aiDismissTimer);
+    this.aiDismissTimer = setTimeout(() => {
+      if (!audio.isSpeaking()) {
+        aiStatement.classList.add('hidden');
       }
-    }
-
-    const newLine = document.createElement('div');
-    newLine.className = 'caption-line active';
-    this.container.appendChild(newLine);
-    this.lines.push(newLine);
-    this.currentLineEl = newLine;
-    this.currentWordCount = 0;
+    }, 7000);
   }
 
-  scheduleCleanup() {
-    clearTimeout(this.cleanupTimer);
-    this.cleanupTimer = setTimeout(() => {
-      if (!audio.isSpeaking() && this.wordQueue.length === 0) {
-        this.fadeAllLines();
-      } else {
-        this.scheduleCleanup();
-      }
-    }, 3800);
-  }
-
-  fadeAllLines() {
-    this.lines.forEach((line) => {
-      line.classList.remove('active', 'step-1', 'step-2');
-      line.classList.add('step-3');
-      setTimeout(() => {
-        if (line.parentNode) line.parentNode.removeChild(line);
-      }, 680);
-    });
-    this.lines = [];
-    this.currentLineEl = null;
-    this.currentWordCount = 0;
-  }
-
-  clear() {
-    clearTimeout(this.flushTimer);
-    clearTimeout(this.cleanupTimer);
-    this.partialToken = '';
-    this.wordQueue = [];
-    this.isRevealing = false;
-    this.fadeAllLines();
+  purge() {
+    userStatement.classList.add('hidden');
+    aiStatement.classList.add('hidden');
+    this.currentAiText = '';
   }
 }
 
-const captions = new CaptionStreamer(captionStream);
+const dialogue = new DialogueEngine();
 
 // =========================================================
-// DIRECT BROWSER-TO-GEMINI v1beta LIVE WEBSOCKET (MATCHING ass.py)
-// Strictly waits for setupComplete before streaming audio/text
+// OPTICAL VIEWPORT (EXPANDABLE & ROTATABLE)
 // =========================================================
-function connectDirectToGoogle() {
+async function toggleCamera() {
+  if (isCamActive) {
+    shutCamera();
+  } else {
+    await bootCamera();
+  }
+}
+
+async function bootCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: currentFacingMode,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 60, min: 30 },
+      },
+    });
+
+    camStream = stream;
+    cameraFeed.srcObject = stream;
+
+    // Apply mirror flip only for front camera
+    if (currentFacingMode === 'user') {
+      cameraFeed.classList.add('mirrored');
+    } else {
+      cameraFeed.classList.remove('mirrored');
+    }
+
+    cameraFrame.classList.remove('hidden');
+    btnCamera.classList.add('active');
+    isCamActive = true;
+
+    // Send exactly 1 frame per second to AI to preserve bandwidth
+    camInterval = setInterval(broadcastFrame, 1000);
+  } catch (err) {
+    console.warn('[Camera] Access notice:', err?.message || err);
+  }
+}
+
+function shutCamera() {
+  if (camInterval) {
+    clearInterval(camInterval);
+    camInterval = null;
+  }
+  if (camStream) {
+    camStream.getTracks().forEach((track) => track.stop());
+    camStream = null;
+  }
+  cameraFrame.classList.add('hidden');
+  cameraFrame.classList.remove('expanded');
+  isCamExpanded = false;
+  btnRotateCam.classList.add('hidden');
+  expandIcon.classList.remove('hidden');
+  collapseIcon.classList.add('hidden');
+  btnCamera.classList.remove('active');
+  isCamActive = false;
+}
+
+async function rotateCamera() {
+  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+  if (camStream) {
+    camStream.getTracks().forEach((track) => track.stop());
+    camStream = null;
+  }
+  await bootCamera();
+}
+
+function toggleExpandCamera() {
+  isCamExpanded = !isCamExpanded;
+  cameraFrame.classList.toggle('expanded', isCamExpanded);
+
+  if (isCamExpanded) {
+    btnRotateCam.classList.remove('hidden');
+    expandIcon.classList.add('hidden');
+    collapseIcon.classList.remove('hidden');
+  } else {
+    btnRotateCam.classList.add('hidden');
+    expandIcon.classList.remove('hidden');
+    collapseIcon.classList.add('hidden');
+  }
+}
+
+btnExpandCam.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleExpandCamera();
+});
+
+btnRotateCam.addEventListener('click', (e) => {
+  e.stopPropagation();
+  rotateCamera();
+});
+
+function broadcastFrame() {
+  if (!isCamActive || !cameraFeed.videoWidth || !ws || ws.readyState !== WebSocket.OPEN || !isSetupComplete) {
+    return;
+  }
+
+  const ctx = offscreenCanvas.getContext('2d');
+  const targetW = 480;
+  const targetH = Math.round((cameraFeed.videoHeight / cameraFeed.videoWidth) * targetW) || 360;
+
+  offscreenCanvas.width = targetW;
+  offscreenCanvas.height = targetH;
+  ctx.drawImage(cameraFeed, 0, 0, targetW, targetH);
+
+  const base64Jpeg = offscreenCanvas.toDataURL('image/jpeg', 0.72).split(',')[1];
+  if (!base64Jpeg || base64Jpeg.length < 200) return;
+
+  const framePayload = {
+    realtimeInput: {
+      video: {
+        mimeType: 'image/jpeg',
+        data: base64Jpeg,
+      },
+    },
+  };
+  ws.send(JSON.stringify(framePayload));
+}
+
+// =========================================================
+// GEMINI LIVE WEBSOCKET CONNECTION
+// Grabs user speech transcript via inputAudioTranscription
+// =========================================================
+function connectLiveGateway() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     return;
   }
@@ -489,7 +569,7 @@ function connectDirectToGoogle() {
     ws = new WebSocket(GOOGLE_LIVE_WS_URL);
 
     ws.onopen = () => {
-      console.log(`[Gemini Live v1beta] Socket opened. Sending setup for ${MODEL_NAME} (Voice: ${VOICE_NAME})...`);
+      console.log(`[Gemini Live] Socket opened for ${MODEL_NAME}`);
       isReconnecting = false;
 
       const setupConfig = {
@@ -504,11 +584,12 @@ function connectDirectToGoogle() {
             },
           },
         },
-        outputAudioTranscription: {},
+        inputAudioTranscription: {}, // Enables real-time transcription of what user says
+        outputAudioTranscription: {}, // Enables real-time transcription of AI reply
         systemInstruction: {
           parts: [
             {
-              text: `You are a friendly ai, tujhe urdu/hindi main baat krni hai user sy, Now welcome the user for the first time`,
+              text: `You are Novax, an avant-garde AI companion. You talk with the user naturally in Urdu and Hinglish "Please don't spit hindi text". You have live vision enabled when the user transmits video. Welcome the user briefly. The user appears to be some muslim.`,
             },
           ],
         },
@@ -516,6 +597,7 @@ function connectDirectToGoogle() {
 
       if (sessionHandle) {
         setupConfig.sessionResumption = { handle: sessionHandle };
+        console.log(`[Gemini Live] Attempting session resumption with handle: ${sessionHandle}`);
       } else {
         setupConfig.sessionResumption = {};
       }
@@ -534,54 +616,52 @@ function connectDirectToGoogle() {
 
         const msg = JSON.parse(rawData);
 
-        // 1. Handshake complete: ONLY now is it valid to send clientContent or realtimeInput
+        // 1. Handshake Complete
         if (msg.setupComplete !== undefined) {
-          console.log('[Gemini Live v1beta] setupComplete received — session is LIVE.');
+          console.log('[Gemini Live] Handshake complete.');
           isSetupComplete = true;
 
-          // Flush any user messages typed while connecting
           while (pendingMessages.length > 0) {
-            const pending = pendingMessages.shift();
-            doSendText(pending);
+            const nextMsg = pendingMessages.shift();
+            transmitText(nextMsg);
           }
 
-          // Just like ass.py, greet briefly on initial session boot if no pending message
           if (!hasSentInitialBoot && !sessionHandle) {
             hasSentInitialBoot = true;
-            doSendText(' Please give me a very brief, friendly welcome.');
+            transmitText('Please give me a very brief, friendly welcome in Urdu/Hindi.');
           }
           return;
         }
 
-        // 2. Session Resumption Handle update (matches ass.py)
+        // 2. Cache Fresh Session Handle in Background
         if (msg.sessionResumptionUpdate) {
           const update = msg.sessionResumptionUpdate;
           if (update.resumable && update.newHandle) {
             sessionHandle = update.newHandle;
+            SessionVault.storeHandle(update.newHandle);
+            console.log('[Gemini Live] Cached session resumption handle to localStorage.');
           }
         }
 
-        // 3. Proactive GoAway reconnect (matches ass.py)
-        if (msg.goAway) {
-          console.log('[Gemini Live v1beta] Server sent GoAway, reconnecting...');
-          try {
-            ws.close();
-          } catch (e) {}
-          return;
-        }
-
-        // 4. Server Content (Audio + Output Transcription)
+        // 3. Server Multimodal Content
         if (msg.serverContent) {
           const sc = msg.serverContent;
 
           if (sc.interrupted) {
             audio.stopAll();
-            captions.clear();
+            dialogue.purge();
           }
 
+          // Grab the text/transcript returned by Gemini of what the user spoke and what it understood
+          const inTranscript = sc.inputTranscription || sc.interimInputTranscription;
+          if (inTranscript && inTranscript.text) {
+            dialogue.showUser(inTranscript.text);
+          }
+
+          // Output transcript of what AI is saying
           const outTranscript = sc.outputTranscription;
           if (outTranscript && outTranscript.text) {
-            captions.addWords(outTranscript.text);
+            dialogue.feedAiTranscript(outTranscript.text);
           }
 
           if (sc.modelTurn && Array.isArray(sc.modelTurn.parts)) {
@@ -593,38 +673,45 @@ function connectDirectToGoogle() {
           }
 
           if (sc.turnComplete) {
-            captions.flush();
+            dialogue.concludeAiTurn();
           }
         }
       } catch (err) {
-        console.warn('[Direct Live Message Warning]:', err);
+        console.warn('[Message Warning]:', err);
       }
     };
 
     ws.onerror = (e) => {
-      console.warn('[Direct Live WS Error]:', e);
+      console.warn('[WebSocket Error]:', e);
     };
 
     ws.onclose = (event) => {
-      console.log(`[Direct Live WS Closed] code=${event.code} reason=${event.reason || 'none'}`);
       isSetupComplete = false;
-      if (event.code === 1007 || event.code === 1008) {
+
+      if (event.code === 1007 || event.code === 1008 || event.reason?.includes('resumption')) {
+        console.warn('[Gemini Live] Session handle invalidated by server. Clearing cache.');
+        SessionVault.clear();
         sessionHandle = null;
       }
+
       if (!isReconnecting) {
         isReconnecting = true;
-        setTimeout(connectDirectToGoogle, 2500);
+        setTimeout(connectLiveGateway, 2500);
       }
     };
   } catch (err) {
-    console.error('[Direct Live Connect Error]:', err);
+    console.error('[Connect Error]:', err);
   }
 }
 
-connectDirectToGoogle();
+connectLiveGateway();
 
-function doSendText(text) {
+function transmitText(text) {
   if (!text || !text.trim() || !ws || ws.readyState !== WebSocket.OPEN || !isSetupComplete) return;
+
+  dialogue.showUser(text.trim());
+  dialogue.beginAiTurn();
+
   const clientContentMessage = {
     clientContent: {
       turns: [
@@ -639,24 +726,22 @@ function doSendText(text) {
   ws.send(JSON.stringify(clientContentMessage));
 }
 
-function sendText(text) {
+function queueOrSendText(text) {
   if (!text || !text.trim()) return;
   audio.initOutput();
 
   if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-    connectDirectToGoogle();
+    connectLiveGateway();
   }
 
   if (ws && ws.readyState === WebSocket.OPEN && isSetupComplete) {
-    doSendText(text);
+    transmitText(text);
   } else {
     pendingMessages.push(text.trim());
   }
 }
 
-// Send mic chunk using non-deprecated realtimeInput.audio (matches ass.py & v1beta spec)
-// Strictly gated on isSetupComplete so audio never interrupts the initial setup handshake
-function sendAudioChunk(base64Data) {
+function transmitAudioChunk(base64Data) {
   if (ws && ws.readyState === WebSocket.OPEN && isSetupComplete) {
     const realtimeInputMessage = {
       realtimeInput: {
@@ -670,157 +755,126 @@ function sendAudioChunk(base64Data) {
   }
 }
 
-function ensureLiveMic() {
-  audio.initOutput();
-  audio.startMicrophone(sendAudioChunk);
+// =========================================================
+// UNIVERSAL KEYBOARD FOCUS (TYPE ANYWHERE ON SCREEN/PC)
+// =========================================================
+function focusInputInterface() {
+  if (omniInput) {
+    omniInput.focus();
+    omniInput.click();
+  }
 }
 
-// Silent gesture unlock for browser AudioContext & Microphone (no visual click bounce)
-window.addEventListener('click', ensureLiveMic, { once: true });
-window.addEventListener('touchstart', ensureLiveMic, { once: true });
-window.addEventListener('keydown', ensureLiveMic, { once: true });
-
-// Pointer Eye Tracking
-window.addEventListener('mousemove', (e) => {
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight / 2 - 30;
-  pointerX = Math.max(-1, Math.min(1, (e.clientX - cx) / (window.innerWidth * 0.4)));
-  pointerY = Math.max(-1, Math.min(1, (e.clientY - cy) / (window.innerHeight * 0.4)));
+omniInput.addEventListener('input', () => {
+  const text = omniInput.value;
+  if (text.length > 0) {
+    ghostChars.textContent = text;
+    ghostTyping.classList.remove('hidden');
+  } else {
+    ghostTyping.classList.add('hidden');
+  }
 });
 
-// Floating Live Invisible Text Typer (Appears only while typing on keyboard, no chatbox)
-window.addEventListener('keydown', (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-
+omniInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
-    if (typedText.trim()) {
-      sendText(typedText);
-      typedText = '';
-      if (typingLine) typingLine.classList.add('hidden');
-    }
-  } else if (e.key === 'Backspace') {
-    typedText = typedText.slice(0, -1);
-    if (typedText.length === 0) {
-      if (typingLine) typingLine.classList.add('hidden');
-    } else {
-      if (typingText) typingText.textContent = typedText;
+    e.preventDefault();
+    const val = omniInput.value.trim();
+    if (val) {
+      queueOrSendText(val);
+      omniInput.value = '';
+      ghostTyping.classList.add('hidden');
     }
   } else if (e.key === 'Escape') {
-    typedText = '';
-    if (typingLine) typingLine.classList.add('hidden');
+    omniInput.value = '';
+    ghostTyping.classList.add('hidden');
     if (audio.isSpeaking()) {
       audio.stopAll();
-      captions.clear();
+      dialogue.purge();
       if (ws && ws.readyState === WebSocket.OPEN && isSetupComplete) {
         ws.send(JSON.stringify({ clientContent: { turnComplete: true } }));
       }
     }
-  } else if (e.key.length === 1) {
-    typedText += e.key;
-    if (typingText) typingText.textContent = typedText;
-    if (typingLine) typingLine.classList.remove('hidden');
   }
 });
 
-// Procedural Blinking
+// PC keystrokes immediately captured
+window.addEventListener('keydown', (e) => {
+  if (e.target !== omniInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    focusInputInterface();
+  }
+});
+
+// Tap/click anywhere focuses hidden input
+window.addEventListener('click', (e) => {
+  if (!e.target.closest('#control-dock') && !e.target.closest('#camera-frame')) {
+    focusInputInterface();
+  }
+});
+
+btnCamera.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleCamera();
+});
+
+btnMic.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (audio.isListening) {
+    audio.stopMicrophone();
+    btnMic.classList.remove('active');
+  } else {
+    audio.startMicrophone(transmitAudioChunk);
+    btnMic.classList.add('active');
+  }
+});
+
+btnResetSession.addEventListener('click', (e) => {
+  e.stopPropagation();
+  SessionVault.clear();
+  sessionHandle = null;
+  if (ws) {
+    try { ws.close(); } catch {}
+  }
+  dialogue.purge();
+  console.log('[SessionVault] User purged session cache.');
+});
+
+// Unlock audio on initial gesture
+function unlockMedia() {
+  audio.initOutput();
+  audio.startMicrophone(transmitAudioChunk);
+}
+window.addEventListener('click', unlockMedia, { once: true });
+window.addEventListener('touchstart', unlockMedia, { once: true });
+
+// Pointer Tracking
+window.addEventListener('mousemove', (e) => {
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2 - 25;
+  pointerX = Math.max(-1, Math.min(1, (e.clientX - cx) / (window.innerWidth * 0.4)));
+  pointerY = Math.max(-1, Math.min(1, (e.clientY - cy) / (window.innerHeight * 0.4)));
+});
+
+// Blinking Cycle
 let isBlinking = false;
-function scheduleBlink() {
-  const timeout = 2200 + Math.random() * 3200;
+function triggerBlinkCycle() {
+  const interval = 2200 + Math.random() * 3400;
   setTimeout(() => {
     isBlinking = true;
     setTimeout(() => {
       isBlinking = false;
-      scheduleBlink();
-    }, 135);
-  }, timeout);
+      triggerBlinkCycle();
+    }, 120);
+  }, interval);
 }
-scheduleBlink();
+triggerBlinkCycle();
 
 // =========================================================
-// 2D CANVAS RADIAL FFT SPECTRUM & ORBITAL PARTICLE ENGINE
-// =========================================================
-const ORBIT_PARTICLES = Array.from({ length: 28 }, (_, i) => ({
-  angle: (i / 28) * Math.PI * 2,
-  radius: 132 + (i % 4) * 16,
-  speed: (0.004 + (i % 5) * 0.0018) * (i % 2 === 0 ? 1 : -1),
-  size: 1.5 + (i % 3) * 0.9,
-}));
-
-function renderVisualizerCanvas(time, speaking, isHearing, vol, micLevel) {
-  if (!visualizerCtx || !visualizerCanvas) return;
-  const w = visualizerCanvas.width;
-  const h = visualizerCanvas.height;
-  const cx = w / 2;
-  const cy = h / 2;
-
-  visualizerCtx.clearRect(0, 0, w, h);
-
-  const activeEnergy = speaking ? vol : isHearing ? micLevel : 0.04;
-  const primaryColor = isHearing
-    ? '16, 185, 129'
-    : speaking
-    ? '56, 189, 248'
-    : '99, 102, 241';
-
-  visualizerCtx.save();
-  visualizerCtx.beginPath();
-  const baseRadius = 122 + activeEnergy * 28;
-  visualizerCtx.arc(cx, cy, baseRadius, 0, Math.PI * 2);
-  visualizerCtx.strokeStyle = `rgba(${primaryColor}, ${0.18 + activeEnergy * 0.45})`;
-  visualizerCtx.lineWidth = 1.5;
-  visualizerCtx.stroke();
-
-  const bandCount = 48;
-  const bands = speaking ? audio.getFrequencyBands(bandCount) : null;
-  for (let i = 0; i < bandCount; i++) {
-    const angle = (i / bandCount) * Math.PI * 2 - Math.PI / 2;
-    let amp = 0.04;
-    if (speaking && bands) {
-      amp = bands[i] * 0.85 + Math.sin(time * 8 + i * 0.4) * 0.08;
-    } else if (isHearing) {
-      amp = micLevel * (0.5 + 0.5 * Math.sin(time * 10 + i * 0.5));
-    } else {
-      amp = 0.04 + 0.025 * Math.sin(time * 2 + i * 0.3);
-    }
-
-    const innerR = 126;
-    const barLen = 4 + Math.max(0, amp * 44);
-    const x1 = cx + Math.cos(angle) * innerR;
-    const y1 = cy + Math.sin(angle) * innerR;
-    const x2 = cx + Math.cos(angle) * (innerR + barLen);
-    const y2 = cy + Math.sin(angle) * (innerR + barLen);
-
-    visualizerCtx.beginPath();
-    visualizerCtx.moveTo(x1, y1);
-    visualizerCtx.lineTo(x2, y2);
-    visualizerCtx.strokeStyle = `rgba(${primaryColor}, ${0.22 + Math.min(0.75, amp)})`;
-    visualizerCtx.lineWidth = 2.6;
-    visualizerCtx.lineCap = 'round';
-    visualizerCtx.stroke();
-  }
-
-  for (const p of ORBIT_PARTICLES) {
-    p.angle += p.speed * (1 + activeEnergy * 3.2);
-    const r = p.radius + Math.sin(time * 2 + p.angle * 2) * (4 + activeEnergy * 14);
-    const px = cx + Math.cos(p.angle) * r;
-    const py = cy + Math.sin(p.angle) * r;
-
-    visualizerCtx.beginPath();
-    visualizerCtx.arc(px, py, p.size + activeEnergy * 1.4, 0, Math.PI * 2);
-    visualizerCtx.fillStyle = `rgba(${primaryColor}, ${0.35 + activeEnergy * 0.5})`;
-    visualizerCtx.fill();
-  }
-
-  visualizerCtx.restore();
-}
-
-// =========================================================
-// 60FPS SPEAKING, HEARING & EYE-TRACKING ANIMATION LOOP
+// 60FPS GRAPHITE/SLATE ANIMATION LOOP
 // =========================================================
 let smoothedVol = 0;
 let time = 0;
 
-function animate() {
+function renderFrame() {
   time += 0.04;
 
   const speaking = audio.isSpeaking();
@@ -832,121 +886,119 @@ function animate() {
   const micLevel = audio.smoothedMicLevel;
   const isHearing = audio.isListening && micLevel > 0.025;
 
-  renderVisualizerCanvas(time, speaking, isHearing, vol, micLevel);
-
-  // 1. "AI IS HEARING" VISUAL EFFECTS
-  if (robotContainer) {
-    robotContainer.classList.toggle('speaking', speaking);
+  // 1. Reactive State
+  if (monolithStage) {
+    monolithStage.classList.toggle('speaking', speaking);
 
     if (isHearing && !speaking) {
-      robotContainer.classList.add('hearing');
+      monolithStage.classList.add('hearing');
 
       const waveOpacity = Math.min(1, micLevel * 2.8);
-      if (earWaves) earWaves.style.opacity = waveOpacity.toString();
+      if (lateralWaves) lateralWaves.style.opacity = waveOpacity.toString();
 
-      if (foreheadPulse) {
-        foreheadPulse.setAttribute('opacity', (waveOpacity * 0.85).toString());
-        foreheadPulse.setAttribute('r', (4 + micLevel * 9).toString());
+      if (foreheadRipple) {
+        foreheadRipple.setAttribute('opacity', (waveOpacity * 0.9).toString());
+        foreheadRipple.setAttribute('r', (4 + micLevel * 9).toString());
       }
 
-      if (leftIris) leftIris.setAttribute('fill', '#34d399');
-      if (rightIris) rightIris.setAttribute('fill', '#34d399');
+      if (irisL) irisL.setAttribute('fill', '#ffffff');
+      if (irisR) irisR.setAttribute('fill', '#ffffff');
 
-      hWaveBars.forEach((bar, i) => {
+      meterBars.forEach((bar, i) => {
         const h = 4 + Math.sin(time * 12 + i * 1.3) * 7 * micLevel + micLevel * 16;
         bar.style.height = `${Math.max(4, h)}px`;
       });
 
-      if (listeningRing) listeningRing.classList.add('active');
+      if (acousticRing) acousticRing.classList.add('active');
     } else {
-      robotContainer.classList.remove('hearing');
-      if (earWaves) earWaves.style.opacity = '0';
-      if (foreheadPulse) foreheadPulse.setAttribute('opacity', '0');
-      if (listeningRing) listeningRing.classList.remove('active');
+      monolithStage.classList.remove('hearing');
+      if (lateralWaves) lateralWaves.style.opacity = '0';
+      if (foreheadRipple) foreheadRipple.setAttribute('opacity', '0');
+      if (acousticRing) acousticRing.classList.remove('active');
 
       if (!speaking) {
-        if (leftIris) leftIris.setAttribute('fill', '#38bdf8');
-        if (rightIris) rightIris.setAttribute('fill', '#38bdf8');
+        if (irisL) irisL.setAttribute('fill', '#d8d8e0');
+        if (irisR) irisR.setAttribute('fill', '#d8d8e0');
       }
     }
   }
 
-  // 2. SINGLE SPEAKING MOUTH ANIMATION
+  // 2. Speaking Aperture
   if (speaking && vol > 0.015) {
     const wave = Math.sin(time * 15) * 0.22;
-    const mouthHeight = Math.max(4, Math.min(46, 6 + vol * 48 + wave * 5));
-    const mouthWidth = Math.max(38, Math.min(76, 46 + vol * 24));
+    const mouthHeight = Math.max(4, Math.min(44, 6 + vol * 46 + wave * 5));
+    const mouthWidth = Math.max(36, Math.min(74, 44 + vol * 24));
 
-    if (mouthCavity) {
-      mouthCavity.setAttribute('rx', (mouthWidth / 2).toString());
-      mouthCavity.setAttribute('ry', (mouthHeight / 2).toString());
-      mouthCavity.setAttribute('opacity', '1');
+    if (apertureDepth) {
+      apertureDepth.setAttribute('rx', (mouthWidth / 2).toString());
+      apertureDepth.setAttribute('ry', (mouthHeight / 2).toString());
+      apertureDepth.setAttribute('opacity', '1');
     }
 
-    if (mouthGlow) {
-      mouthGlow.setAttribute('rx', (mouthWidth / 2.8).toString());
-      mouthGlow.setAttribute('ry', (mouthHeight / 2.8).toString());
-      mouthGlow.setAttribute('opacity', '0.55');
+    if (apertureLum) {
+      apertureLum.setAttribute('rx', (mouthWidth / 2.8).toString());
+      apertureLum.setAttribute('ry', (mouthHeight / 2.8).toString());
+      apertureLum.setAttribute('opacity', '0.6');
     }
 
-    if (mouthLine) {
-      mouthLine.setAttribute(
+    if (apertureSlit) {
+      apertureSlit.setAttribute(
         'd',
-        `M -${mouthWidth / 2} 0 Q 0 ${mouthHeight / 2 + 3} ${mouthWidth / 2} 0`
+        `M -${mouthWidth / 2} 0 Q 0 ${mouthHeight / 2 + 2.5} ${mouthWidth / 2} 0`
       );
     }
 
-    if (vocalBars) vocalBars.classList.add('speaking');
-    bars.forEach((bar, i) => {
-      const barH = 6 + Math.sin(time * 11 + i * 0.9) * 12 * vol + vol * 18;
+    if (vocalSpectrogram) vocalSpectrogram.classList.add('speaking');
+    vocalBars.forEach((bar, i) => {
+      const barH = 5 + Math.sin(time * 11 + i * 0.9) * 12 * vol + vol * 18;
       bar.style.height = `${Math.max(4, barH)}px`;
     });
 
-    const swayX = Math.sin(time * 3.2) * 2.2 * vol;
-    const swayY = Math.cos(time * 4.2) * 2.6 * vol;
-    if (robotSvg) robotSvg.style.transform = `translate(${swayX}px, ${swayY}px)`;
+    const swayX = Math.sin(time * 3) * 2 * vol;
+    const swayY = Math.cos(time * 4) * 2.4 * vol;
+    if (monolithSvg) monolithSvg.style.transform = `translate(${swayX}px, ${swayY}px)`;
   } else {
-    if (mouthCavity) mouthCavity.setAttribute('opacity', '0');
-    if (mouthGlow) mouthGlow.setAttribute('opacity', '0');
-    if (mouthLine) mouthLine.setAttribute('d', 'M -22 0 Q 0 2.8 22 0');
-    if (vocalBars) vocalBars.classList.remove('speaking');
+    if (apertureDepth) apertureDepth.setAttribute('opacity', '0');
+    if (apertureLum) apertureLum.setAttribute('opacity', '0');
+    if (apertureSlit) apertureSlit.setAttribute('d', 'M -22 0 Q 0 1.5 22 0');
+    if (vocalSpectrogram) vocalSpectrogram.classList.remove('speaking');
 
-    const breatheX = Math.sin(time * 0.8) * 1.2;
-    const breatheY = Math.cos(time * 0.6) * 1.8;
-    if (robotSvg) robotSvg.style.transform = `translate(${breatheX}px, ${breatheY}px)`;
+    const breatheX = Math.sin(time * 0.8) * 1.1;
+    const breatheY = Math.cos(time * 0.6) * 1.6;
+    if (monolithSvg) monolithSvg.style.transform = `translate(${breatheX}px, ${breatheY}px)`;
   }
 
-  // 3. Eye Blinking & Cursor Tracking
-  const lookX = (pointerX * 3.6).toFixed(2);
-  const lookY = (pointerY * 2.8).toFixed(2);
-  if (leftIris && rightIris && leftPupil && rightPupil) {
-    leftIris.setAttribute('cx', lookX);
-    leftIris.setAttribute('cy', lookY);
-    rightIris.setAttribute('cx', lookX);
-    rightIris.setAttribute('cy', lookY);
-    leftPupil.setAttribute('cx', (pointerX * 4.5).toFixed(2));
-    leftPupil.setAttribute('cy', (pointerY * 3.4).toFixed(2));
-    rightPupil.setAttribute('cx', (pointerX * 4.5).toFixed(2));
-    rightPupil.setAttribute('cy', (pointerY * 3.4).toFixed(2));
+  // 3. Eye Tracking & Blinking
+  const lookX = (pointerX * 3.5).toFixed(2);
+  const lookY = (pointerY * 2.6).toFixed(2);
+  if (irisL && irisR && pupilL && pupilR) {
+    irisL.setAttribute('cx', lookX);
+    irisL.setAttribute('cy', lookY);
+    irisR.setAttribute('cx', lookX);
+    irisR.setAttribute('cy', lookY);
+    pupilL.setAttribute('cx', (pointerX * 4.4).toFixed(2));
+    pupilL.setAttribute('cy', (pointerY * 3.2).toFixed(2));
+    pupilR.setAttribute('cx', (pointerX * 4.4).toFixed(2));
+    pupilR.setAttribute('cy', (pointerY * 3.2).toFixed(2));
   }
 
-  if (leftEye && rightEye) {
+  if (opticalL && opticalR) {
     if (isBlinking) {
-      leftEye.setAttribute('transform', 'translate(88, 88) scale(1, 0.08)');
-      rightEye.setAttribute('transform', 'translate(152, 88) scale(1, 0.08)');
+      opticalL.setAttribute('transform', 'translate(96, 100) scale(1, 0.08)');
+      opticalR.setAttribute('transform', 'translate(164, 100) scale(1, 0.08)');
     } else {
-      leftEye.setAttribute('transform', 'translate(88, 88) scale(1, 1)');
-      rightEye.setAttribute('transform', 'translate(152, 88) scale(1, 1)');
+      opticalL.setAttribute('transform', 'translate(96, 98) scale(1, 1)');
+      opticalR.setAttribute('transform', 'translate(164, 98) scale(1, 1)');
     }
   }
 
-  // 4. Background Ambient Halo Scale
-  if (ambientAura) {
-    const auraScale = 1 + (speaking ? vol * 0.48 : isHearing ? micLevel * 0.4 : 0.05);
-    ambientAura.style.transform = `scale(${auraScale})`;
+  // 4. Ambient Fog Scale
+  if (ambientFog) {
+    const fogScale = 1 + (speaking ? vol * 0.42 : isHearing ? micLevel * 0.32 : 0.04);
+    ambientFog.style.transform = `scale(${fogScale})`;
   }
 
-  requestAnimationFrame(animate);
+  requestAnimationFrame(renderFrame);
 }
 
-requestAnimationFrame(animate);
+requestAnimationFrame(renderFrame);
