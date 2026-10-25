@@ -8,7 +8,7 @@ const GOOGLE_LIVE_WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai
 
 // Session Resumption Cache Constants
 const SESSION_CACHE_KEY = 'Novax_gemini_session_handle_v1';
-const SESSION_TTL_MS = 1000 * 60 * 15; // 15-minute validity
+const SESSION_TTL_MS = 1000 * 60 * 60 * 2; // 2 hours validity
 
 // Audio PCM conversions
 function float32To16BitPCMBase64(input) {
@@ -116,7 +116,7 @@ class AudioSystem {
     this.userMicLevel = 0;
     this.smoothedMicLevel = 0;
 
-    // Buffers worklet frames to 128ms packets to prevent websocket flooding
+    // Buffer 2048 samples (~128ms) to prevent socket flooding
     this.audioBuffer = [];
     this.targetChunkSize = 2048;
   }
@@ -157,7 +157,8 @@ class AudioSystem {
       source.connect(this.gainNode);
 
       const now = this.outputCtx.currentTime;
-      const startTime = Math.max(now + 0.005, this.nextStartTime);
+      // 20ms jitter lookahead prevents stutter / mid-sentence stalls
+      const startTime = Math.max(now + 0.02, this.nextStartTime);
       source.start(startTime);
       this.nextStartTime = startTime + buffer.duration;
 
@@ -322,7 +323,7 @@ const audio = new AudioSystem();
 let ws = null;
 let isSetupComplete = false;
 let sessionHandle = SessionVault.getValidHandle();
-let hasSentInitialBoot = false;
+let totalConversationsCount = 0;
 let pointerX = 0;
 let pointerY = 0;
 let isReconnecting = false;
@@ -333,31 +334,26 @@ const monolithStage = document.getElementById('monolith-stage');
 const monolithSvg = document.getElementById('monolith-svg');
 const ambientFog = document.getElementById('ambient-fog');
 const acousticRing = document.getElementById('acoustic-ring');
-const meterBars = document.querySelectorAll('.meter-bar');
 const lateralWaves = document.getElementById('lateral-waves');
 const foreheadRipple = document.getElementById('forehead-ripple');
-const apertureDepth = document.getElementById('aperture-depth');
-const apertureLum = document.getElementById('aperture-lum');
-const apertureSlit = document.getElementById('aperture-slit');
-const vocalSpectrogram = document.getElementById('vocal-spectrogram');
-const vocalBars = document.querySelectorAll('.vocal-bar');
 const opticalL = document.getElementById('optical-l');
 const opticalR = document.getElementById('optical-r');
 const irisL = document.getElementById('iris-l');
 const irisR = document.getElementById('iris-r');
 const pupilL = document.getElementById('pupil-l');
 const pupilR = document.getElementById('pupil-r');
+const apertureDepth = document.getElementById('aperture-depth');
+const apertureLum = document.getElementById('aperture-lum');
+const apertureSlit = document.getElementById('aperture-slit');
+const vocalSpectrogram = document.getElementById('vocal-spectrogram');
+const vocalBars = document.querySelectorAll('.vocal-bar');
 
 // Dialogue References
-const userStatement = document.getElementById('user-statement');
-const userBody = document.getElementById('user-body');
-const aiStatement = document.getElementById('ai-statement');
-const aiBody = document.getElementById('ai-body');
+const dialogueStage = document.getElementById('dialogue-stage');
 
-// Controls & Keyboard References
-const omniInput = document.getElementById('omni-input');
-const ghostTyping = document.getElementById('ghost-typing');
-const ghostChars = document.getElementById('ghost-chars');
+// Form & Action References
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
 const btnCamera = document.getElementById('btn-camera');
 const btnMic = document.getElementById('btn-mic');
 const btnResetSession = document.getElementById('btn-reset-session');
@@ -375,61 +371,127 @@ let camStream = null;
 let camInterval = null;
 let isCamActive = false;
 let isCamExpanded = false;
-let currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
+let currentFacingMode = 'user';
 
 // =========================================================
-// 1-TO-1 DIALOGUE MANAGER
+// SLIDING 2-MESSAGE DIALOGUE ENGINE
+// No premature empty AI card! Exits with slow 900ms upward glide
 // =========================================================
-class DialogueEngine {
-  constructor() {
-    this.currentAiText = '';
-    this.userDismissTimer = null;
-    this.aiDismissTimer = null;
+class SlidingDialogueEngine {
+  constructor(container) {
+    this.container = container;
+    this.messages = [];
+    this.maxVisible = 2;
+    this.currentAiTurn = null;
   }
 
   showUser(text) {
     if (!text || !text.trim()) return;
-    clearTimeout(this.userDismissTimer);
-    userBody.textContent = text.trim();
-    userStatement.classList.remove('hidden');
+    totalConversationsCount++;
 
-    this.userDismissTimer = setTimeout(() => {
-      userStatement.classList.add('hidden');
-    }, 7500);
-  }
+    const lastMsg = this.messages[this.messages.length - 1];
+    if (lastMsg && lastMsg.role === 'user') {
+      lastMsg.text = text.trim();
+      lastMsg.bodyEl.textContent = lastMsg.text;
+      this.scrollToBottom(lastMsg.bodyEl);
+      return;
+    }
 
-  beginAiTurn() {
-    clearTimeout(this.aiDismissTimer);
-    this.currentAiText = '';
-    aiBody.textContent = '';
-    aiStatement.classList.remove('hidden');
+    this.pushMessage('user', 'YOU', text.trim());
   }
 
   feedAiTranscript(chunk) {
     if (!chunk) return;
-    this.currentAiText += chunk;
-    aiBody.textContent = this.currentAiText;
-    aiStatement.classList.remove('hidden');
-    clearTimeout(this.aiDismissTimer);
+    if (!this.currentAiTurn) {
+      this.currentAiTurn = this.pushMessage('ai', 'Novax', '');
+    }
+    this.currentAiTurn.text += chunk;
+    this.currentAiTurn.bodyEl.textContent = this.currentAiTurn.text;
+    this.scrollToBottom(this.currentAiTurn.bodyEl);
   }
 
   concludeAiTurn() {
-    clearTimeout(this.aiDismissTimer);
-    this.aiDismissTimer = setTimeout(() => {
-      if (!audio.isSpeaking()) {
-        aiStatement.classList.add('hidden');
-      }
-    }, 7000);
+    this.currentAiTurn = null;
+  }
+
+  pushMessage(role, label, text) {
+    const card = document.createElement('div');
+    card.className = `statement-card ${role}-role entering`;
+
+    const origin = document.createElement('div');
+    origin.className = 'origin-label';
+    origin.textContent = label;
+
+    const body = document.createElement('div');
+    body.className = 'statement-body';
+    body.textContent = text;
+
+    card.appendChild(origin);
+    card.appendChild(body);
+    this.container.appendChild(card);
+
+    requestAnimationFrame(() => {
+      card.classList.remove('entering');
+      card.classList.add('active');
+    });
+
+    const msgObj = {
+      id: Math.random().toString(36).substring(2, 9),
+      role,
+      element: card,
+      bodyEl: body,
+      text,
+    };
+
+    this.messages.push(msgObj);
+
+    // Oldest card takes 900ms to slowly float upward and dissolve behind avatar
+    while (this.messages.length > this.maxVisible) {
+      const oldest = this.messages.shift();
+      oldest.element.classList.add('sliding-out');
+      setTimeout(() => {
+        if (oldest.element.parentNode) {
+          oldest.element.parentNode.removeChild(oldest.element);
+        }
+      }, 900);
+    }
+
+    return msgObj;
+  }
+
+  scrollToBottom(el) {
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
   }
 
   purge() {
-    userStatement.classList.add('hidden');
-    aiStatement.classList.add('hidden');
-    this.currentAiText = '';
+    this.messages.forEach((m) => {
+      if (m.element.parentNode) {
+        m.element.parentNode.removeChild(m.element);
+      }
+    });
+    this.messages = [];
+    this.currentAiTurn = null;
   }
 }
 
-const dialogue = new DialogueEngine();
+const dialogue = new SlidingDialogueEngine(dialogueStage);
+
+// =========================================================
+// MOBILE VISUAL VIEWPORT (PINS INPUT BAR ABOVE KEYBOARD)
+// =========================================================
+if (window.visualViewport) {
+  const updateViewportOffset = () => {
+    const vp = window.visualViewport;
+    const offsetFromBottom = Math.max(0, window.innerHeight - (vp.offsetTop + vp.height));
+    const finalOffset = offsetFromBottom > 0 ? offsetFromBottom + 12 : 18;
+    document.documentElement.style.setProperty('--keyboard-offset', `${finalOffset}px`);
+  };
+
+  window.visualViewport.addEventListener('resize', updateViewportOffset);
+  window.visualViewport.addEventListener('scroll', updateViewportOffset);
+}
 
 // =========================================================
 // OPTICAL VIEWPORT (EXPANDABLE & ROTATABLE)
@@ -442,37 +504,7 @@ async function toggleCamera() {
   }
 }
 
-async function bootCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: currentFacingMode,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 60, min: 30 },
-      },
-    });
 
-    camStream = stream;
-    cameraFeed.srcObject = stream;
-
-    // Apply mirror flip only for front camera
-    if (currentFacingMode === 'user') {
-      cameraFeed.classList.add('mirrored');
-    } else {
-      cameraFeed.classList.remove('mirrored');
-    }
-
-    cameraFrame.classList.remove('hidden');
-    btnCamera.classList.add('active');
-    isCamActive = true;
-
-    // Send exactly 1 frame per second to AI to preserve bandwidth
-    camInterval = setInterval(broadcastFrame, 1000);
-  } catch (err) {
-    console.warn('[Camera] Access notice:', err?.message || err);
-  }
-}
 
 function shutCamera() {
   if (camInterval) {
@@ -527,36 +559,88 @@ btnRotateCam.addEventListener('click', (e) => {
   rotateCamera();
 });
 
+
+async function bootCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: currentFacingMode,
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    });
+
+    camStream = stream;
+    cameraFeed.srcObject = stream;
+    cameraFeed.muted = true;
+    cameraFeed.playsInline = true;
+    
+    // Explicitly start native hardware playback
+    await cameraFeed.play().catch(() => {});
+
+    if (currentFacingMode === 'user') {
+      cameraFeed.classList.add('mirrored');
+    } else {
+      cameraFeed.classList.remove('mirrored');
+    }
+
+    cameraFrame.classList.remove('hidden');
+    btnCamera.classList.add('active');
+    isCamActive = true;
+
+    if (camInterval) clearInterval(camInterval);
+    // Send 1 frame per second to AI quietly in background
+    camInterval = setInterval(broadcastFrame, 1000);
+  } catch (err) {
+    console.warn('[Camera] Access notice:', err?.message || err);
+  }
+}
+
 function broadcastFrame() {
   if (!isCamActive || !cameraFeed.videoWidth || !ws || ws.readyState !== WebSocket.OPEN || !isSetupComplete) {
     return;
   }
 
-  const ctx = offscreenCanvas.getContext('2d');
-  const targetW = 480;
-  const targetH = Math.round((cameraFeed.videoHeight / cameraFeed.videoWidth) * targetW) || 360;
+  // 360px width is optimal for Gemini Live vision without bandwidth overhead
+  const targetW = 360;
+  const targetH = Math.round((cameraFeed.videoHeight / cameraFeed.videoWidth) * targetW) || 270;
 
-  offscreenCanvas.width = targetW;
-  offscreenCanvas.height = targetH;
+  // Avoid reallocating canvas dimensions unless changed
+  if (offscreenCanvas.width !== targetW || offscreenCanvas.height !== targetH) {
+    offscreenCanvas.width = targetW;
+    offscreenCanvas.height = targetH;
+  }
+
+  const ctx = offscreenCanvas.getContext('2d');
   ctx.drawImage(cameraFeed, 0, 0, targetW, targetH);
 
-  const base64Jpeg = offscreenCanvas.toDataURL('image/jpeg', 0.72).split(',')[1];
-  if (!base64Jpeg || base64Jpeg.length < 200) return;
+  // Asynchronous toBlob encodes off the main thread so the live preview NEVER hitches
+  offscreenCanvas.toBlob((blob) => {
+    if (!blob) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (!isCamActive || !ws || ws.readyState !== WebSocket.OPEN || !isSetupComplete) return;
+      const result = reader.result;
+      if (typeof result !== 'string') return;
+      const base64Jpeg = result.split(',')[1];
+      if (!base64Jpeg || base64Jpeg.length < 200) return;
 
-  const framePayload = {
-    realtimeInput: {
-      video: {
-        mimeType: 'image/jpeg',
-        data: base64Jpeg,
-      },
-    },
-  };
-  ws.send(JSON.stringify(framePayload));
+      const framePayload = {
+        realtimeInput: {
+          video: {
+            mimeType: 'image/jpeg',
+            data: base64Jpeg,
+          },
+        },
+      };
+      ws.send(JSON.stringify(framePayload));
+    };
+    reader.readAsDataURL(blob);
+  }, 'image/jpeg', 0.65);
 }
 
 // =========================================================
 // GEMINI LIVE WEBSOCKET CONNECTION
-// Grabs user speech transcript via inputAudioTranscription
 // =========================================================
 function connectLiveGateway() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -584,8 +668,11 @@ function connectLiveGateway() {
             },
           },
         },
-        inputAudioTranscription: {}, // Enables real-time transcription of what user says
-        outputAudioTranscription: {}, // Enables real-time transcription of AI reply
+        contextWindowCompression: {
+          slidingWindow: {},
+        },
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
         systemInstruction: {
           parts: [
             {
@@ -597,7 +684,7 @@ function connectLiveGateway() {
 
       if (sessionHandle) {
         setupConfig.sessionResumption = { handle: sessionHandle };
-        console.log(`[Gemini Live] Attempting session resumption with handle: ${sessionHandle}`);
+        console.log(`[Gemini Live] Resuming session with handle: ${sessionHandle}`);
       } else {
         setupConfig.sessionResumption = {};
       }
@@ -626,20 +713,19 @@ function connectLiveGateway() {
             transmitText(nextMsg);
           }
 
-          if (!hasSentInitialBoot && !sessionHandle) {
-            hasSentInitialBoot = true;
+          if (totalConversationsCount === 0 && !sessionHandle) {
             transmitText('Please give me a very brief, friendly welcome in Urdu/Hindi.');
           }
           return;
         }
 
-        // 2. Cache Fresh Session Handle in Background
+        // 2. Cache Session Resumption Handle
         if (msg.sessionResumptionUpdate) {
           const update = msg.sessionResumptionUpdate;
           if (update.resumable && update.newHandle) {
             sessionHandle = update.newHandle;
             SessionVault.storeHandle(update.newHandle);
-            console.log('[Gemini Live] Cached session resumption handle to localStorage.');
+            console.log('[Gemini Live] Session handle cached to localStorage.');
           }
         }
 
@@ -649,16 +735,14 @@ function connectLiveGateway() {
 
           if (sc.interrupted) {
             audio.stopAll();
-            dialogue.purge();
+            dialogue.concludeAiTurn();
           }
 
-          // Grab the text/transcript returned by Gemini of what the user spoke and what it understood
           const inTranscript = sc.inputTranscription || sc.interimInputTranscription;
           if (inTranscript && inTranscript.text) {
             dialogue.showUser(inTranscript.text);
           }
 
-          // Output transcript of what AI is saying
           const outTranscript = sc.outputTranscription;
           if (outTranscript && outTranscript.text) {
             dialogue.feedAiTranscript(outTranscript.text);
@@ -710,7 +794,6 @@ function transmitText(text) {
   if (!text || !text.trim() || !ws || ws.readyState !== WebSocket.OPEN || !isSetupComplete) return;
 
   dialogue.showUser(text.trim());
-  dialogue.beginAiTurn();
 
   const clientContentMessage = {
     clientContent: {
@@ -741,7 +824,10 @@ function queueOrSendText(text) {
   }
 }
 
+// Echo suppression: Do not stream mic input while AI is speaking
 function transmitAudioChunk(base64Data) {
+  if (audio.isSpeaking()) return;
+
   if (ws && ws.readyState === WebSocket.OPEN && isSetupComplete) {
     const realtimeInputMessage = {
       realtimeInput: {
@@ -756,58 +842,20 @@ function transmitAudioChunk(base64Data) {
 }
 
 // =========================================================
-// UNIVERSAL KEYBOARD FOCUS (TYPE ANYWHERE ON SCREEN/PC)
+// CHAT FORM & ACTIONS
 // =========================================================
-function focusInputInterface() {
-  if (omniInput) {
-    omniInput.focus();
-    omniInput.click();
-  }
-}
-
-omniInput.addEventListener('input', () => {
-  const text = omniInput.value;
-  if (text.length > 0) {
-    ghostChars.textContent = text;
-    ghostTyping.classList.remove('hidden');
-  } else {
-    ghostTyping.classList.add('hidden');
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const val = chatInput.value.trim();
+  if (val) {
+    queueOrSendText(val);
+    chatInput.value = '';
   }
 });
 
-omniInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    const val = omniInput.value.trim();
-    if (val) {
-      queueOrSendText(val);
-      omniInput.value = '';
-      ghostTyping.classList.add('hidden');
-    }
-  } else if (e.key === 'Escape') {
-    omniInput.value = '';
-    ghostTyping.classList.add('hidden');
-    if (audio.isSpeaking()) {
-      audio.stopAll();
-      dialogue.purge();
-      if (ws && ws.readyState === WebSocket.OPEN && isSetupComplete) {
-        ws.send(JSON.stringify({ clientContent: { turnComplete: true } }));
-      }
-    }
-  }
-});
-
-// PC keystrokes immediately captured
 window.addEventListener('keydown', (e) => {
-  if (e.target !== omniInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    focusInputInterface();
-  }
-});
-
-// Tap/click anywhere focuses hidden input
-window.addEventListener('click', (e) => {
-  if (!e.target.closest('#control-dock') && !e.target.closest('#camera-frame')) {
-    focusInputInterface();
+  if (e.target !== chatInput && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+    chatInput.focus();
   }
 });
 
@@ -831,6 +879,7 @@ btnResetSession.addEventListener('click', (e) => {
   e.stopPropagation();
   SessionVault.clear();
   sessionHandle = null;
+  totalConversationsCount = 0;
   if (ws) {
     try { ws.close(); } catch {}
   }
@@ -838,7 +887,6 @@ btnResetSession.addEventListener('click', (e) => {
   console.log('[SessionVault] User purged session cache.');
 });
 
-// Unlock audio on initial gesture
 function unlockMedia() {
   audio.initOutput();
   audio.startMicrophone(transmitAudioChunk);
@@ -846,30 +894,30 @@ function unlockMedia() {
 window.addEventListener('click', unlockMedia, { once: true });
 window.addEventListener('touchstart', unlockMedia, { once: true });
 
-// Pointer Tracking
+// Pointer Eye Tracking
 window.addEventListener('mousemove', (e) => {
   const cx = window.innerWidth / 2;
-  const cy = window.innerHeight / 2 - 25;
+  const cy = window.innerHeight / 2 - 30;
   pointerX = Math.max(-1, Math.min(1, (e.clientX - cx) / (window.innerWidth * 0.4)));
   pointerY = Math.max(-1, Math.min(1, (e.clientY - cy) / (window.innerHeight * 0.4)));
 });
 
 // Blinking Cycle
 let isBlinking = false;
-function triggerBlinkCycle() {
-  const interval = 2200 + Math.random() * 3400;
+function scheduleBlink() {
+  const timeout = 2200 + Math.random() * 3200;
   setTimeout(() => {
     isBlinking = true;
     setTimeout(() => {
       isBlinking = false;
-      triggerBlinkCycle();
-    }, 120);
-  }, interval);
+      scheduleBlink();
+    }, 130);
+  }, timeout);
 }
-triggerBlinkCycle();
+scheduleBlink();
 
 // =========================================================
-// 60FPS GRAPHITE/SLATE ANIMATION LOOP
+// 60FPS GRAPHITE/SLATE ANIMATION LOOP (AVATAR LOCKED IN PLACE)
 // =========================================================
 let smoothedVol = 0;
 let time = 0;
@@ -904,11 +952,6 @@ function renderFrame() {
       if (irisL) irisL.setAttribute('fill', '#ffffff');
       if (irisR) irisR.setAttribute('fill', '#ffffff');
 
-      meterBars.forEach((bar, i) => {
-        const h = 4 + Math.sin(time * 12 + i * 1.3) * 7 * micLevel + micLevel * 16;
-        bar.style.height = `${Math.max(4, h)}px`;
-      });
-
       if (acousticRing) acousticRing.classList.add('active');
     } else {
       monolithStage.classList.remove('hearing');
@@ -923,7 +966,7 @@ function renderFrame() {
     }
   }
 
-  // 2. Speaking Aperture
+  // 2. Speaking Aperture Dynamics (Avatar locked in place: no body bobbing)
   if (speaking && vol > 0.015) {
     const wave = Math.sin(time * 15) * 0.22;
     const mouthHeight = Math.max(4, Math.min(44, 6 + vol * 46 + wave * 5));
@@ -953,19 +996,11 @@ function renderFrame() {
       const barH = 5 + Math.sin(time * 11 + i * 0.9) * 12 * vol + vol * 18;
       bar.style.height = `${Math.max(4, barH)}px`;
     });
-
-    const swayX = Math.sin(time * 3) * 2 * vol;
-    const swayY = Math.cos(time * 4) * 2.4 * vol;
-    if (monolithSvg) monolithSvg.style.transform = `translate(${swayX}px, ${swayY}px)`;
   } else {
     if (apertureDepth) apertureDepth.setAttribute('opacity', '0');
     if (apertureLum) apertureLum.setAttribute('opacity', '0');
     if (apertureSlit) apertureSlit.setAttribute('d', 'M -22 0 Q 0 1.5 22 0');
     if (vocalSpectrogram) vocalSpectrogram.classList.remove('speaking');
-
-    const breatheX = Math.sin(time * 0.8) * 1.1;
-    const breatheY = Math.cos(time * 0.6) * 1.6;
-    if (monolithSvg) monolithSvg.style.transform = `translate(${breatheX}px, ${breatheY}px)`;
   }
 
   // 3. Eye Tracking & Blinking
