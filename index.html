@@ -2,37 +2,56 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Novax</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
+    <title>Novax // AI</title>
     <meta name="description" content="Autonomous conversational agent with multimodal vision." />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <!-- Universal hidden input for typing anywhere -->
-    <input
-      type="text"
-      id="omni-input"
-      autocomplete="off"
-      autocorrect="off"
-      autocapitalize="off"
-      spellcheck="false"
-      aria-hidden="true"
-    />
+    <!-- Top Actions Bar -->
+    <header id="top-nav">
+      <!-- Top-Left: Camera & Mic -->
+      <div class="nav-left">
+        <button id="btn-camera" class="top-tool-btn" title="Toggle Camera" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+        </button>
 
-    <!-- Optical Viewport (Expandable & Rotatable, Zero Text) -->
+        <button id="btn-mic" class="top-tool-btn active" title="Toggle Microphone" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Top-Right: Reset Session -->
+      <div class="nav-right">
+        <button id="btn-reset-session" class="top-tool-btn" title="Reset Session" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Expandable & Rotatable Camera (Zero text overlay) -->
     <div id="camera-frame" class="hidden">
       <video id="camera-feed" class="mirrored" autoplay playsinline muted></video>
       <div id="camera-controls">
-        <!-- Rotate front/back camera (shown in expanded view) -->
-        <button id="btn-rotate-cam" class="cam-icon-btn hidden" title="Switch Camera">
+        <button id="btn-rotate-cam" class="cam-icon-btn hidden" title="Switch Camera" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6"></path>
             <path d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
           </svg>
         </button>
 
-        <!-- Expand / Minimize toggle -->
-        <button id="btn-expand-cam" class="cam-icon-btn" title="Expand Viewport">
+        <button id="btn-expand-cam" class="cam-icon-btn" title="Expand Viewport" type="button">
           <svg id="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 3 21 3 21 9"></polyline>
             <polyline points="9 21 3 21 3 15"></polyline>
@@ -49,158 +68,123 @@
       </div>
     </div>
 
-    <!-- Main Workspace (Zero Overlapping) -->
-    <main id="app-workspace">
-      <!-- Section 1: Avatar -->
-      <section id="avatar-zone">
-        <div id="monolith-stage">
-          <div id="ambient-fog"></div>
-          <div id="acoustic-ring"></div>
+    <!-- Center Workspace: Avatar + Dialogue Subtitles Directly Underneath -->
+    <main id="center-stage">
+      <!-- Exact Avatar from Screenshot -->
+      <div id="monolith-stage">
+        <div id="ambient-fog"></div>
+        <div id="acoustic-ring"></div>
 
-          <!-- Dynamic Acoustic Meter -->
-          <div id="acoustic-meter">
-            <span class="meter-bar"></span>
-            <span class="meter-bar"></span>
-            <span class="meter-bar"></span>
-            <span class="meter-bar"></span>
-            <span class="meter-bar"></span>
-          </div>
+        <svg id="monolith-svg" viewBox="0 0 260 220" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="chassisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#38383e" />
+              <stop offset="50%" stop-color="#2a2a2f" />
+              <stop offset="100%" stop-color="#1f1f23" />
+            </linearGradient>
 
-          <!-- Matte Slate Monochromatic Avatar -->
-          <svg id="monolith-svg" viewBox="0 0 260 220" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="chassisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#38383e" />
-                <stop offset="50%" stop-color="#2a2a2f" />
-                <stop offset="100%" stop-color="#1f1f23" />
-              </linearGradient>
+            <linearGradient id="visorPlate" x1="15%" y1="0%" x2="85%" y2="100%">
+              <stop offset="0%" stop-color="#28282d" stop-opacity="0.95" />
+              <stop offset="50%" stop-color="#1d1d22" stop-opacity="0.98" />
+              <stop offset="100%" stop-color="#161619" stop-opacity="1" />
+            </linearGradient>
 
-              <linearGradient id="visorPlate" x1="15%" y1="0%" x2="85%" y2="100%">
-                <stop offset="0%" stop-color="#28282d" stop-opacity="0.95" />
-                <stop offset="50%" stop-color="#1d1d22" stop-opacity="0.98" />
-                <stop offset="100%" stop-color="#161619" stop-opacity="1" />
-              </linearGradient>
+            <linearGradient id="steelRing" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#8a8a94" />
+              <stop offset="50%" stop-color="#3a3a42" />
+              <stop offset="100%" stop-color="#b0b0ba" />
+            </linearGradient>
 
-              <linearGradient id="steelRing" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#8a8a94" />
-                <stop offset="50%" stop-color="#3a3a42" />
-                <stop offset="100%" stop-color="#b0b0ba" />
-              </linearGradient>
+            <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2.5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
 
-              <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="2.5" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-            </defs>
+          <!-- Lateral Acoustic Waves -->
+          <g id="lateral-waves" opacity="0">
+            <path d="M 22 92 A 22 22 0 0 0 22 128" fill="none" stroke="#d0d0d8" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M 14 84 A 32 32 0 0 0 14 136" fill="none" stroke="#7e7e88" stroke-width="1.5" stroke-linecap="round" />
+            <path d="M 238 92 A 22 22 0 0 1 238 128" fill="none" stroke="#d0d0d8" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M 246 84 A 32 32 0 0 1 246 136" fill="none" stroke="#7e7e88" stroke-width="1.5" stroke-linecap="round" />
+          </g>
 
-            <!-- Lateral Acoustic Sensory Waves -->
-            <g id="lateral-waves" opacity="0">
-              <path d="M 22 92 A 22 22 0 0 0 22 128" fill="none" stroke="#d0d0d8" stroke-width="1.8" stroke-linecap="round" />
-              <path d="M 14 84 A 32 32 0 0 0 14 136" fill="none" stroke="#7e7e88" stroke-width="1.5" stroke-linecap="round" />
-              <path d="M 238 92 A 22 22 0 0 1 238 128" fill="none" stroke="#d0d0d8" stroke-width="1.8" stroke-linecap="round" />
-              <path d="M 246 84 A 32 32 0 0 1 246 136" fill="none" stroke="#7e7e88" stroke-width="1.5" stroke-linecap="round" />
-            </g>
+          <!-- Gyroscopic Ring -->
+          <circle id="gyro-orbit" cx="130" cy="110" r="92" fill="none" stroke="url(#steelRing)" stroke-width="1.5" opacity="0.6" />
 
-            <!-- Gyroscopic Ring -->
-            <circle id="gyro-orbit" cx="130" cy="110" r="92" fill="none" stroke="url(#steelRing)" stroke-width="1.5" opacity="0.6" />
+          <!-- Chassis Nodes -->
+          <g opacity="0.75">
+            <rect x="30" y="94" width="7" height="32" rx="3.5" fill="#2d2d33" stroke="#484852" stroke-width="1.2" />
+            <rect x="223" y="94" width="7" height="32" rx="3.5" fill="#2d2d33" stroke="#484852" stroke-width="1.2" />
+          </g>
 
-            <!-- Chassis Nodes -->
-            <g opacity="0.75">
-              <rect x="30" y="94" width="7" height="32" rx="3.5" fill="#2d2d33" stroke="#484852" stroke-width="1.2" />
-              <rect x="223" y="94" width="7" height="32" rx="3.5" fill="#2d2d33" stroke="#484852" stroke-width="1.2" />
-            </g>
+          <!-- Rounded Head Contour -->
+          <rect x="46" y="28" width="168" height="164" rx="48" fill="url(#chassisGrad)" stroke="#45454f" stroke-width="1.4" />
 
-            <!-- Head Contour -->
-            <rect x="46" y="28" width="168" height="164" rx="48" fill="url(#chassisGrad)" stroke="#45454f" stroke-width="1.4" />
+          <!-- Visor Screen -->
+          <rect x="58" y="40" width="144" height="140" rx="36" fill="url(#visorPlate)" stroke="#323238" stroke-width="1.2" />
 
-            <!-- Visor Screen -->
-            <rect x="58" y="40" width="144" height="140" rx="36" fill="url(#visorPlate)" stroke="#323238" stroke-width="1.2" />
+          <!-- Forehead Beacon -->
+          <circle id="forehead-orb" cx="130" cy="56" r="3.2" fill="#787882" opacity="0.5" filter="url(#softGlow)" />
+          <circle id="forehead-ripple" cx="130" cy="56" r="3.2" fill="none" stroke="#d8d8e0" stroke-width="1.2" opacity="0" />
 
-            <!-- Forehead Beacon -->
-            <circle id="forehead-orb" cx="130" cy="56" r="3.2" fill="#787882" opacity="0.5" filter="url(#softGlow)" />
-            <circle id="forehead-ripple" cx="130" cy="56" r="3.2" fill="none" stroke="#d8d8e0" stroke-width="1.2" opacity="0" />
+          <!-- Optical Left (Circular Eye from screenshot) -->
+          <g id="optical-l" transform="translate(96, 98)">
+            <ellipse cx="0" cy="0" rx="15" ry="15" fill="#141417" stroke="#323238" stroke-width="1" />
+            <ellipse id="iris-l" cx="0" cy="0" rx="10.5" ry="10.5" fill="#d8d8e0" filter="url(#softGlow)" />
+            <circle id="pupil-l" cx="0" cy="0" r="4.2" fill="#18181c" />
+            <circle cx="-3" cy="-3" r="1.8" fill="#ffffff" opacity="0.9" />
+          </g>
 
-            <!-- Optical Unit Left -->
-            <g id="optical-l" transform="translate(96, 98)">
-              <ellipse cx="0" cy="0" rx="15" ry="15" fill="#141417" stroke="#323238" stroke-width="1" />
-              <ellipse id="iris-l" cx="0" cy="0" rx="10.5" ry="10.5" fill="#d8d8e0" filter="url(#softGlow)" />
-              <circle id="pupil-l" cx="0" cy="0" r="4.2" fill="#18181c" />
-              <circle cx="-3" cy="-3" r="1.8" fill="#ffffff" opacity="0.9" />
-            </g>
+          <!-- Optical Right (Circular Eye from screenshot) -->
+          <g id="optical-r" transform="translate(164, 98)">
+            <ellipse cx="0" cy="0" rx="15" ry="15" fill="#141417" stroke="#323238" stroke-width="1" />
+            <ellipse id="iris-r" cx="0" cy="0" rx="10.5" ry="10.5" fill="#d8d8e0" filter="url(#softGlow)" />
+            <circle id="pupil-r" cx="0" cy="0" r="4.2" fill="#18181c" />
+            <circle cx="-3" cy="-3" r="1.8" fill="#ffffff" opacity="0.9" />
+          </g>
 
-            <!-- Optical Unit Right -->
-            <g id="optical-r" transform="translate(164, 98)">
-              <ellipse cx="0" cy="0" rx="15" ry="15" fill="#141417" stroke="#323238" stroke-width="1" />
-              <ellipse id="iris-r" cx="0" cy="0" rx="10.5" ry="10.5" fill="#d8d8e0" filter="url(#softGlow)" />
-              <circle id="pupil-r" cx="0" cy="0" r="4.2" fill="#18181c" />
-              <circle cx="-3" cy="-3" r="1.8" fill="#ffffff" opacity="0.9" />
-            </g>
+          <!-- Speaking Mouth Line & Cavity -->
+          <g id="aperture-unit" transform="translate(130, 148)">
+            <ellipse id="aperture-depth" cx="0" cy="0" rx="20" ry="0" fill="#121215" stroke="#3a3a42" stroke-width="1.2" opacity="0" />
+            <ellipse id="aperture-lum" cx="0" cy="2" rx="13" ry="0" fill="#d8d8e0" opacity="0" filter="url(#softGlow)" />
+            <path id="aperture-slit" d="M -22 0 Q 0 1.5 22 0" fill="none" stroke="#b8b8c2" stroke-width="2.5" stroke-linecap="round" filter="url(#softGlow)" />
+          </g>
+        </svg>
 
-            <!-- Speaking Aperture -->
-            <g id="aperture-unit" transform="translate(130, 148)">
-              <ellipse id="aperture-depth" cx="0" cy="0" rx="20" ry="0" fill="#121215" stroke="#3a3a42" stroke-width="1.2" opacity="0" />
-              <ellipse id="aperture-lum" cx="0" cy="2" rx="13" ry="0" fill="#d8d8e0" opacity="0" filter="url(#softGlow)" />
-              <path id="aperture-slit" d="M -22 0 Q 0 1.5 22 0" fill="none" stroke="#b8b8c2" stroke-width="2.5" stroke-linecap="round" filter="url(#softGlow)" />
-            </g>
-          </svg>
-
-          <!-- Vocal Spectrogram -->
-          <div id="vocal-spectrogram">
-            <span class="vocal-bar"></span>
-            <span class="vocal-bar"></span>
-            <span class="vocal-bar"></span>
-            <span class="vocal-bar"></span>
-            <span class="vocal-bar"></span>
-          </div>
+        <!-- Vocal Spectrogram Bars Under Chin -->
+        <div id="vocal-spectrogram">
+          <span class="vocal-bar"></span>
+          <span class="vocal-bar"></span>
+          <span class="vocal-bar"></span>
+          <span class="vocal-bar"></span>
+          <span class="vocal-bar"></span>
         </div>
-      </section>
+      </div>
 
-      <!-- Section 2: Dialogue Zone (Directly Below Avatar) -->
-      <section id="dialogue-zone">
-        <div id="user-statement" class="statement-card hidden">
-          <div class="origin-label">YOU</div>
-          <div id="user-body" class="statement-body"></div>
-        </div>
-        <div id="ai-statement" class="statement-card hidden">
-          <div class="origin-label">Novax</div>
-          <div id="ai-body" class="statement-body"></div>
-        </div>
-      </section>
+      <!-- Dialogue Subtitles Directly Beneath the Avatar -->
+      <section id="dialogue-stage" aria-live="polite"></section>
     </main>
 
-    <!-- Typing Feedback (Only visible while pressing keys) -->
-    <div id="ghost-typing" class="hidden">
-      <span id="ghost-chars"></span><span id="ghost-cursor"></span>
+    <!-- Bottom Input Dock (Above Mobile Virtual Keyboard) -->
+    <div id="input-dock">
+      <form id="chat-form" autocomplete="off">
+        <input
+          type="text"
+          id="chat-input"
+          placeholder="Speak or type a thought..."
+          autocomplete="off"
+          autocorrect="on"
+          spellcheck="false"
+        />
+        <button id="btn-send-text" type="submit" title="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
     </div>
-
-    <!-- Controls Dock -->
-    <nav id="control-dock">
-      <button id="btn-camera" class="dock-btn" title="Toggle Camera">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-          <circle cx="12" cy="13" r="4"></circle>
-        </svg>
-        <span>CAMERA</span>
-      </button>
-
-      <button id="btn-mic" class="dock-btn active" title="Toggle Microphone">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-          <line x1="12" y1="19" x2="12" y2="23"></line>
-          <line x1="8" y1="23" x2="16" y2="23"></line>
-        </svg>
-        <span>MIC</span>
-      </button>
-
-      <button id="btn-reset-session" class="dock-btn" title="Reset Session Cache">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-          <path d="M3 3v5h5"></path>
-        </svg>
-        <span>RESET</span>
-      </button>
-    </nav>
 
     <script type="module" src="app.js"></script>
   </body>
