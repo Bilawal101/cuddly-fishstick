@@ -1,5 +1,5 @@
 /* =========================================================
-   SOFTER MATTE GRAPHITE & SLATE // ZERO EYE STRAIN
+   DARK SLATE / GRAPHITE AESTHETIC (MATCHING SCREENSHOT)
    ========================================================= */
 
 * {
@@ -9,13 +9,17 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+:root {
+  --keyboard-offset: 18px;
+}
+
 html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: #1e1e22;
+  background-color: #121316;
   background-image:
-    radial-gradient(circle at 50% 32%, #292930 0%, #202025 55%, #18181c 100%);
+    radial-gradient(circle at 50% 32%, #1e1f26 0%, #15161b 50%, #0d0e11 100%);
   color: #dedee4;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   user-select: none;
@@ -24,71 +28,116 @@ html, body {
   outline: none;
 }
 
-#omni-input {
-  position: absolute;
-  top: -200px;
-  left: -200px;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: auto;
-  border: none;
-  outline: none;
-}
-
 .hidden {
   display: none !important;
 }
 
 /* =========================================================
-   EXPANDABLE & ROTATABLE OPTICAL VIEWPORT (NO TEXT)
+   TOP NAV (CAM & MIC LEFT // RESET RIGHT)
+   ========================================================= */
+#top-nav {
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.nav-left, .nav-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.top-tool-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(30, 31, 38, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9d9da8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.top-tool-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.top-tool-btn:hover {
+  background: rgba(45, 46, 56, 0.9);
+  color: #f0f0f5;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.top-tool-btn.active {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #ffffff;
+}
+
+/* =========================================================
+   EXPANDABLE & ROTATABLE OPTICAL VIEWPORT
    ========================================================= */
 #camera-frame {
   position: absolute;
-  top: 24px;
-  right: 24px;
-  width: 165px;
-  height: 112px;
+  top: 66px;
+  left: 18px;
+  width: 155px;
+  height: 110px;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: #25252b;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  z-index: 35;
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #1b1c22;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+  z-index: 45;
+  transition: all 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Big Screen Expansion */
 #camera-frame.expanded {
   top: 50%;
-  right: 50%;
-  transform: translate(50%, -50%);
-  width: min(88vw, 720px);
-  height: min(70vh, 500px);
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(88vw, 680px);
+  height: min(65vh, 480px);
   border-radius: 20px;
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
-  z-index: 50;
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 32px 70px rgba(0, 0, 0, 0.85);
+  z-index: 55;
 }
 
 #camera-feed {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.25s ease;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 #camera-feed.mirrored {
-  transform: scaleX(-1);
+  transform: scaleX(-1) translateZ(0);
 }
 
 #camera-controls {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   z-index: 2;
 }
 
@@ -96,68 +145,63 @@ html, body {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: rgba(26, 26, 32, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 21, 26, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: #dedee4;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
   transition: all 0.2s ease;
   outline: none;
 }
 
 .cam-icon-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 .cam-icon-btn:hover {
-  background: rgba(45, 45, 54, 0.9);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(40, 42, 52, 0.95);
+  border-color: rgba(255, 255, 255, 0.26);
 }
 
 /* =========================================================
-   RESPONSIVE WORKSPACE (NO OVERLAPPING)
+   CENTER STAGE // AVATAR FOREGROUND & DIALOGUE BACKDROP
    ========================================================= */
-#app-workspace {
+#center-stage {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding-top: 20px;
-  padding-bottom: 74px;
-  gap: 14px;
+  justify-content: flex-start;
+  padding-top: clamp(40px, 8vh, 72px);
+  padding-bottom: 84px;
+  gap: 12px;
+  position: relative;
 }
 
-#avatar-zone {
+/* Monolith Stage sits on top (z-index: 20) so exiting cards hide BEHIND it */
+#monolith-stage {
+  position: relative;
+  width: 275px;
+  height: 235px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-#monolith-stage {
-  position: relative;
-  width: 290px;
-  height: 245px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  z-index: 20;
 }
 
 #ambient-fog {
   position: absolute;
-  width: 320px;
-  height: 320px;
+  width: 310px;
+  height: 310px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(220, 220, 230, 0.07) 0%, rgba(60, 60, 70, 0.04) 50%, transparent 70%);
-  filter: blur(40px);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.06) 0%, rgba(50, 52, 64, 0.04) 50%, transparent 70%);
+  filter: blur(38px);
   pointer-events: none;
   transform: scale(1);
   transition: transform 0.35s ease, background 0.4s ease;
@@ -165,19 +209,19 @@ html, body {
 }
 
 #monolith-stage.hearing #ambient-fog {
-  background: radial-gradient(circle, rgba(230, 230, 240, 0.15) 0%, rgba(90, 90, 105, 0.08) 50%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, rgba(85, 88, 105, 0.08) 50%, transparent 70%);
 }
 
 #monolith-stage.speaking #ambient-fog {
-  background: radial-gradient(circle, rgba(240, 240, 245, 0.2) 0%, rgba(130, 130, 145, 0.1) 50%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, rgba(120, 125, 145, 0.1) 50%, transparent 70%);
 }
 
 #acoustic-ring {
   position: absolute;
-  width: 250px;
-  height: 250px;
+  width: 245px;
+  height: 245px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   pointer-events: none;
   opacity: 0;
   transform: scale(0.96);
@@ -195,41 +239,15 @@ html, body {
   100% { transform: scale(1.35); opacity: 0; }
 }
 
-#acoustic-meter {
-  position: absolute;
-  bottom: 0px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 22px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease;
-  z-index: 4;
-}
-
-#monolith-stage.hearing #acoustic-meter {
-  opacity: 1;
-}
-
-.meter-bar {
-  width: 2.5px;
-  height: 5px;
-  border-radius: 2px;
-  background: linear-gradient(to top, #484852, #9a9aa5, #dedee5);
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.25);
-  transition: height 0.05s ease;
-}
-
+/* Avatar stays strictly locked without any translate sway */
 #monolith-svg {
   position: relative;
   z-index: 3;
-  width: 275px;
-  height: 230px;
+  width: 270px;
+  height: 225px;
   overflow: visible;
   filter: drop-shadow(0 16px 36px rgba(0, 0, 0, 0.65));
-  transition: transform 0.12s ease-out;
+  transform: none !important;
 }
 
 #gyro-orbit {
@@ -249,7 +267,7 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  height: 24px;
+  height: 22px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -264,34 +282,64 @@ html, body {
   width: 3px;
   height: 6px;
   border-radius: 2px;
-  background: linear-gradient(to top, #555560, #c0c0cb, #f0f0f5);
-  box-shadow: 0 0 7px rgba(255, 255, 255, 0.35);
+  background: linear-gradient(to top, #484852, #b8b8c2, #ffffff);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
   transition: height 0.06s ease;
 }
 
-/* Zone 2: Dialogue Zone */
-#dialogue-zone {
+/* =========================================================
+   DIALOGUE STAGE DIRECTLY UNDER ROBOT
+   z-index: 5 renders BEHIND the monolith-stage (z-index: 20)
+   ========================================================= */
+#dialogue-stage {
+  position: relative;
   width: 90%;
-  max-width: 560px;
-  min-height: 120px;
+  max-width: 520px;
+  min-height: 110px;
+  max-height: 195px;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   gap: 10px;
-  pointer-events: none;
-  z-index: 10;
+  pointer-events: auto;
+  z-index: 5;
+  overflow: visible;
 }
 
 .statement-card {
-  border-radius: 12px;
+  border-radius: 13px;
   padding: 10px 16px;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+  will-change: opacity, transform, filter, margin-top;
+  transition:
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.9s ease,
+    margin-top 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Smoothly glides upward behind the avatar chin while dissolving */
+.statement-card.sliding-out {
+  opacity: 0 !important;
+  transform: translateY(-44px) scale(0.92) !important;
+  filter: blur(3.5px) !important;
+  margin-top: -65px !important;
+  pointer-events: none;
+}
+
+.statement-card.entering {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.statement-card.active {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .origin-label {
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
   margin-bottom: 4px;
@@ -302,151 +350,130 @@ html, body {
   font-size: 14.5px;
   line-height: 1.5;
   letter-spacing: 0.01em;
+  max-height: 105px;
+  overflow-y: auto;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  padding-right: 4px;
 }
 
-#user-statement {
+.statement-body::-webkit-scrollbar {
+  width: 3.5px;
+}
+.statement-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
+
+.statement-card.user-role {
   align-self: flex-end;
-  background: rgba(45, 45, 52, 0.85);
+  background: rgba(40, 41, 48, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #f2f2f6;
-  max-width: 85%;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  max-width: 86%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-#user-statement .origin-label {
+.statement-card.user-role .origin-label {
   color: #9d9da8;
 }
 
-#ai-statement {
+.statement-card.ai-role {
   align-self: flex-start;
-  background: rgba(33, 33, 38, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(26, 27, 32, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: #dedee4;
   max-width: 92%;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
 }
 
-#ai-statement .origin-label {
+.statement-card.ai-role .origin-label {
   color: #787882;
 }
 
 /* =========================================================
-   GHOST KEYSTROKE NOTIFICATION
+   BOTTOM INPUT DOCK (CLEAN PILL WITH SEND BUTTON ONLY)
    ========================================================= */
-#ghost-typing {
+#input-dock {
   position: absolute;
-  bottom: 80px;
+  bottom: var(--keyboard-offset, 18px);
   left: 50%;
   transform: translateX(-50%);
-  max-width: 86vw;
-  text-align: center;
-  pointer-events: none;
-  font-size: 14px;
-  font-weight: 500;
-  color: #f5f5fa;
-  z-index: 25;
-  background: rgba(36, 36, 42, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  padding: 8px 18px;
-  border-radius: 9999px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  transition: opacity 0.2s ease;
+  width: 90%;
+  max-width: 520px;
+  z-index: 30;
+  transition: bottom 0.12s ease-out;
 }
 
-#ghost-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 14px;
-  margin-left: 4px;
-  background-color: #ffffff;
-  vertical-align: middle;
-  animation: softBlink 0.85s infinite;
-}
-
-@keyframes softBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
-}
-
-/* =========================================================
-   BOTTOM CONTROLS DOCK
-   ========================================================= */
-#control-dock {
-  position: absolute;
-  bottom: 20px;
+#chat-form {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(34, 34, 40, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  padding: 6px 12px;
+  gap: 8px;
+  background: rgba(28, 29, 36, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-  z-index: 25;
+  padding: 6px 8px 6px 18px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
 }
 
-.dock-btn {
+#chat-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14.5px;
+  color: #f2f2f6;
+  font-family: inherit;
+  caret-color: #ffffff;
+}
+
+#chat-input::placeholder {
+  color: #6a6a75;
+}
+
+#btn-send-text {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
   display: flex;
   align-items: center;
-  gap: 7px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: #9d9da8;
-  padding: 8px 16px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
   outline: none;
 }
 
-.dock-btn svg {
-  width: 15px;
-  height: 15px;
+#btn-send-text svg {
+  width: 14px;
+  height: 14px;
 }
 
-.dock-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f0f0f5;
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-.dock-btn.active {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05);
+#btn-send-text:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 @media (max-width: 600px) {
   #camera-frame {
-    width: 130px;
+    width: 125px;
     height: 90px;
-    top: 18px;
-    right: 16px;
+    top: 62px;
+    left: 16px;
   }
 
   #monolith-stage {
-    width: 250px;
-    height: 210px;
+    width: 245px;
+    height: 205px;
   }
 
   #monolith-svg {
-    width: 240px;
-    height: 200px;
-  }
-
-  .dock-btn span {
-    display: none;
-  }
-
-  .dock-btn {
-    padding: 10px;
+    width: 235px;
+    height: 195px;
   }
 }
